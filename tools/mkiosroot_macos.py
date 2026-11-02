@@ -109,7 +109,6 @@ def main():
         target_mount = tempfile.mkdtemp(prefix="ios_root_")
         print(f"[*] Mounting target image {target_dev} at {target_mount}...")
         run_cmd(['mount', '-t', 'hfs', '-o', 'owners', target_dev, target_mount], capture=False)
-        run_cmd(['diskutil', 'enableOwnership', target_mount], capture=False)
 
         # 3. Attach readonly input DMGs
         os_dev, os_mnt = attach_dmg_readonly(os_dmg)
@@ -118,7 +117,7 @@ def main():
         sys_dev, sys_mnt = attach_dmg_readonly(sysos_dmg)
         attached_disks.append(sys_dev)
 
-        app_dev, app_mnt = attach_dmg_readonly(app_dmg := appos_dmg)
+        app_dev, app_mnt = attach_dmg_readonly(appos_dmg)
         attached_disks.append(app_dev)
 
         # 4. Copy OS root
