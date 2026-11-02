@@ -232,14 +232,17 @@
  	touch_wr(st.gcc, TOUCH_GCC_VOTE, touch_rd(st.gcc, TOUCH_GCC_VOTE) | mask);
  	uint32_t dfs = touch_rd(st.gcc, TOUCH_RCG + 0x14u);
  	uint32_t cfg = touch_rd(st.gcc, TOUCH_RCG + 4u);
-@@ -160,7 +160,7 @@
+@@ -160,7 +160,9 @@
  			return false;
  		}
  	}
 -	const uint32_t branches[] = {0x18004, 0x18008, 0x1800c, 0x18010, 0x18144};
 +	const uint32_t branches[] = {0x1e004, 0x1e008, 0x1e144};
  	for (unsigned i = 0; i < sizeof(branches) / sizeof(branches[0]); ++i) {
- 		if (!touch_wait_clear(st.gcc, branches[i], 1u << 31)) {
+-		if (!touch_wait_clear(st.gcc, branches[i], 1u << 31)) {
++		/* HWCG branches (bit 1 = 0x2, e.g. 0x1e008 = 0x80000002) keep bit 31 set while idle. */
++		if (!(touch_rd(st.gcc, branches[i]) & 2u) &&
++		    !touch_wait_clear(st.gcc, branches[i], 1u << 31)) {
  			printf("SWEET TOUCH: GCC branch %#x halted (%#x)\n", branches[i],
 @@ -209,16 +209,16 @@
  	return st.irq_last;
@@ -326,7 +329,7 @@
  }
  
  static void
-@@ -383,106 +339,105 @@
+@@ -383,106 +341,112 @@
  	st.active = mask;
  }
  
@@ -353,7 +356,14 @@
 -	uint32_t mask = 0;
 -	int err = touch_read(0x5d, GOODIX_EVENT_REG, true, buf, GOODIX_HEAD_LEN);
 +	uint8_t pdt_f01[6] = {0}, pdt_f12[6] = {0}, status[2] = {0}, ctrl = 0;
-+	int err = touch_write_reg(S3706_I2C_ADDR, 0xff, 0x00);
++	int err = ENXIO;
++	for (unsigned attempt = 0; attempt < 5; ++attempt) {
++		err = touch_write_reg(S3706_I2C_ADDR, 0xff, 0x00);
++		if (!err) {
++			break;
++		}
++		touch_wait(50);
++	}
  	if (err) {
 -		return err;
 +		printf("SWEET TOUCH: S3706 page0 select failed err=%d\n", err);
