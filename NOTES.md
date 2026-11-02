@@ -17,6 +17,7 @@
     `SMP SpringBoard[26] slide 0x19b78000 mh 0x102b7c000` -> SpringBoard PID 26 running with multiple active threads (`t0..t5`), `backboardd` threads (`t4..t13`), and system daemons spawning via `xpcproxy` (`bluetoothd`, `fairplayd.H2`).
 - **Next concrete action:**
   - Package boot image with `sweetfb_noconsole=1 sweetfb_hz=30` to mute debug text overlay and display the clean SpringBoard graphical user interface.
+  - **Clean GUI Boot Test (2026-11-03 01:46 local):** Booted `shim/out/shim-boot-0082.img` with `sweetfb_noconsole=1 sweetfb_hz=30` (`Sending 'boot.img' OKAY [0.621s]`, `Booting OKAY [0.081s]`). Watching for clean iOS 16 graphical display / SpringBoard UI presentation.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
