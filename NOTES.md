@@ -1,22 +1,21 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## Active handoff update (2026-11-02)
+## Active handoff update (2026-11-03)
 
-**GM1901 Option B: iOS 16 Root Image Creation & Userdata Flash Preparation:**
-- **S3706 Touch & Root Mount Panic Analysis Completed:**
-  - Photo logs (`uploaded_media_1793634166186.jpg`) confirm XNU boots through all hardware drivers: 8 CPUs (`cpus=8`), AppleCLCD display (`1080x2340`), SPMI buttons (`SWEET KEYS`), and HID touch registration.
-  - The ~5-second black screen shutdown was confirmed as XNU's automatic panic reboot timer (`debug=0xc` / `DB_REBOOT = 0x8`) triggered by `vfs_mountroot` failing to mount root on Android `userdata`.
-  - Bare-metal hardware test in `shim/shim.c` verified Synaptics `S3706` I2C on GPIO 55/56 (`PROBE ack=0`, `F01`, `F12`, `FINGER` event logged).
-- **iOS 16 Root Image Workflow on macOS:**
-  - Extracted 3 DMGs from `/Users/nguyendinhkhanh/Downloads/iPhone10,3,iPhone10,6_16.6.1_20G81_Restore.ipsw` to `/Users/nguyendinhkhanh/Downloads/ipsw_dmgs/`:
-    - `096-57693-083.dmg` (OS root, 4.4 GiB)
-    - `096-57293-083.dmg` (SystemOS cryptex, 2.6 GiB)
-    - `096-57613-084.dmg` (AppOS cryptex, 10 MiB)
-  - Created [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py): native macOS builder using `hdiutil`, `newfs_hfs -s -J -v iOSRoot`, `rsync -aH`, dyld shared cache hard-linking, logd `.migrated` markers, system keybag, and `sweet-root-tweaks.py`.
-  - **Generated `/Users/nguyendinhkhanh/Downloads/ios-root-16g.img` (16 GiB, Case-sensitive Journaled HFS+, verified).**
+**🎉 MILESTONE: iOS 16 ROOT FLASHED TO USERDATA & FIRST XNU BOOT WITH ROOT:**
+- **Userdata Flash Completed:**
+  - Converted `ios-root-16g.img` to Android sparse image `tools/img2simg.py` -> `ios-root-16g.simg` (10.8 GiB, 2,834,887 raw blocks, 1,359,417 zero blocks skipped), bypassing fastboot's AVB footer fetch error.
+  - Flashed `ios-root-16g.simg` into GM1901 internal UFS `userdata` partition (`sda19`, 226.8 GiB):
+    `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg`
+    All 15 chunks (11,074 MiB) written successfully (`Total time: 383.623s`).
+  - All partition backups, bootloaders, recovery, modem, persist remain intact.
+- **XNU Boot Executed:**
+  - Booted `shim/out/shim-boot-0082.img` (`fastboot boot shim/out/shim-boot-0082.img`):
+    - Kernel: `xnu/out-0082/kernel.development.sweet` (commit `e01e6f2`)
+    - ADT: `shim/out/gm1901.adt`
+    - Cmdline: `serial=3 debug=0x1 cpus=8 keepsyms=1 sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0`
 - **Next concrete action:**
-  1. Confirm with user to flash `userdata` with `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.img`.
-  2. Boot `shim/out/shim-boot-0082.img` (`rd=ufsroot0 ufsrw=1 rootrw=1 debug=0x1`) to launch iOS 16 userland (launchd / SpringBoard).
+  - Check phone screen output for `hfs: mounted iOSRoot on device b(1, 0)` and `/sbin/launchd` start.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
