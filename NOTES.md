@@ -12,11 +12,11 @@
     - `096-57693-083.dmg` (OS root, 4.4 GiB)
     - `096-57293-083.dmg` (SystemOS cryptex, 2.6 GiB)
     - `096-57613-084.dmg` (AppOS cryptex, 10 MiB)
-  - Created [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py): native macOS builder using `hdiutil`, `newfs_hfs -s -J -v iOSRoot`, `rsync -aH`, dyld shared cache hard-linking, logd `.migrated` markers, system keybag, and `sweet-root-tweaks.py` (fixed: removed redundant `diskutil enableOwnership` that errored with -69854 on raw BSD mount).
+  - Created [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py): native macOS builder using `hdiutil`, `newfs_hfs -s -J -v iOSRoot`, `rsync -aH`, dyld shared cache hard-linking, logd `.migrated` markers, system keybag, and `sweet-root-tweaks.py`.
+  - **Generated `/Users/nguyendinhkhanh/Downloads/ios-root-16g.img` (16 GiB, Case-sensitive Journaled HFS+, verified).**
 - **Next concrete action:**
-  1. User runs `sudo python3 tools/mkiosroot_macos.py` in Terminal to generate the 16 GiB `ios-root-16g.img`.
-  2. Confirm with user before flashing `userdata` via `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.img`.
-  3. Boot `shim/out/shim-boot-0082.img` with `rd=ufsroot0 ufsrw=1 rootrw=1 debug=0x1` to enter iOS 16 userland.
+  1. Confirm with user to flash `userdata` with `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.img`.
+  2. Boot `shim/out/shim-boot-0082.img` (`rd=ufsroot0 ufsrw=1 rootrw=1 debug=0x1`) to launch iOS 16 userland (launchd / SpringBoard).
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
