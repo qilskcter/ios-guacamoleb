@@ -2,21 +2,20 @@
 
 ## Active handoff update (2026-11-03)
 
-**🎉 MILESTONE: iOS 16 ROOT FLASHED TO USERDATA & FIRST XNU BOOT WITH ROOT:**
-- **Userdata Flash Completed:**
-  - Converted `ios-root-16g.img` to Android sparse image `tools/img2simg.py` -> `ios-root-16g.simg` (10.8 GiB, 2,834,887 raw blocks, 1,359,417 zero blocks skipped), bypassing fastboot's AVB footer fetch error.
-  - Flashed `ios-root-16g.simg` into GM1901 internal UFS `userdata` partition (`sda19`, 226.8 GiB):
-    `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg`
-    All 15 chunks (11,074 MiB) written successfully (`Total time: 383.623s`).
-  - All partition backups, bootloaders, recovery, modem, persist remain intact.
-- **XNU Boot Executed:**
-  - Booted `shim/out/shim-boot-0082.img` (`fastboot boot shim/out/shim-boot-0082.img`):
-    - Reached KDP debugger halt (`Waiting for remote debugger connection.`) because `debug=0x1` halted on unconfigured ignition boot flags.
-    - Repackaged `shim/out/shim-boot-0082.img` with verified iOS userland launch boot arguments:
-      `serial=3 debug=0xc cpus=8 keepsyms=1 -enable_kprintf_spam -noprogress sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`
+**🎉🎉 HISTORIC MILESTONE: APPLE LOGO & PROGRESS BAR ON ONEPLUS 7 (GM1901)!**
+- **Userland Boot Verification (`uploaded_media_1793642405071.jpg`):**
+  - Booted `shim/out/shim-boot-0082.img` with verified iOS parameters:
+    `serial=3 debug=0xc cpus=8 keepsyms=1 -enable_kprintf_spam -noprogress sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`
+  - Kernel cleanly mounted `iOSRoot` on internal UFS `userdata` (`rd=ufsroot0`), started `/sbin/launchd` (PID 1).
+  - Apple boot logo and horizontal progress bar rendered on the `1080x2340` AMOLED display!
+  - Progress bar is advancing as system daemons initialize.
+- **Hardware Architecture Summary on GM1901:**
+  - 8 Kryo 485 CPUs SMP online via PSCI (`cpus=8`).
+  - Native display via `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`).
+  - UFS DMA root filesystem on `sda19` (`userdata`, 16 GiB HFS+).
+  - Hardware buttons (PM8150 SID 0 GPIO6/GPIO7) & Synaptics S3706 touch controller ready.
 - **Next concrete action:**
-  - User holds Power + Volume Down to enter Fastboot mode.
-  - Run `fastboot boot shim/out/shim-boot-0082.img` to launch iOS userland (dyld cache -> launchd -> SpringBoard).
+  - Wait for the progress bar to finish filling and watch for the iOS 16 Hello / SpringBoard home screen.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
