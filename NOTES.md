@@ -3,7 +3,7 @@
 ## Active handoff update (2026-11-03)
 
 **🎉🎉 HISTORIC MILESTONE: FULL TOUCH & BUTTON INTERACTION IN iOS 16 ON ONEPLUS 7!**
-- **Userland Boot & Live Input Verification (`uploaded_media_1793644039792.jpg`, `uploaded_media_1793644192466.jpg`):**
+- **Userland Boot & Live Input Verification (`uploaded_media_1793644039792.jpg`, `uploaded_media_1793644192466.jpg`, `uploaded_media_1793644693181.jpg`):**
   - Booted `shim/out/shim-boot-0082.img` with verified iOS parameters:
     `serial=3 debug=0xc cpus=8 keepsyms=1 -enable_kprintf_spam -noprogress sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`
   - Kernel cleanly mounted `iOSRoot` on internal UFS `userdata` (`rd=ufsroot0`), launched `/sbin/launchd` (PID 1).
@@ -13,15 +13,10 @@
     `SWEET HID: key 0x30 down (1 clients)` -> `backboardd` connected and actively receiving power key events.
   - **Live Touchscreen Controller Verification:**
     `SWEET HID: touch 0 down at 271,1735` -> Synaptics S3706 bit-bang I2C driver on TLMM GPIO 55/56 successfully reads touch coordinates and dispatches directly to `backboardd` digitizer event stream!
-- **All 6 Subsystems Confirmed Working on OnePlus 7 (`GM1901`):**
-  1. 8-core Kryo 485 SMP CPUs online (`cpus=8`, SGI1).
-  2. Framebuffer display via `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`).
-  3. Internal UFS DMA storage (`userdata` partition, 16 GiB HFS+ read-write).
-  4. SPMI hardware keys (Power `key=0`, Vol Up `key=1`, Vol Down `key=2`).
-  5. Synaptics S3706 multi-touch controller (GPIO 55/56 I2C, coordinates verified in userland).
-  6. iOS 16 userland execution (`launchd`, `backboardd` active).
+  - **SpringBoard Running Live (`uploaded_media_1793644693181.jpg`):**
+    `SMP SpringBoard[26] slide 0x19b78000 mh 0x102b7c000` -> SpringBoard PID 26 running with multiple active threads (`t0..t5`), `backboardd` threads (`t4..t13`), and system daemons spawning via `xpcproxy` (`bluetoothd`, `fairplayd.H2`).
 - **Next concrete action:**
-  - Let initial `datamigrator` complete to transition from the 100% progress screen to `SpringBoard`.
+  - Package boot image with `sweetfb_noconsole=1 sweetfb_hz=30` to mute debug text overlay and display the clean SpringBoard graphical user interface.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
