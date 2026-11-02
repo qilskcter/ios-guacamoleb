@@ -2,16 +2,21 @@
 
 ## Active handoff update (2026-11-02)
 
-**GM1901 S3706 Touch Controller Bring-Up & Root Mount Panic Analysis:**
-- **Clarification on ~5s Black Screen Reboot:**
-  - Photo logs confirm XNU initializes all subsystems cleanly (8-core SMP Kryo 485, Display Framebuffer `1080x2340`, SPMI buttons, UFS DMA, and RPMh `ldoa17` 3008 mV).
-  - Boot reaches `cannot mount root, errno = 19` after 7 failed attempts (`unknown Volume Signature : 5adf` / `b284` because `userdata` is currently formatted as Android ext4/f2fs).
-  - Under `debug=0x8`, XNU halts with panic and automatically triggers a warm reboot after ~5 seconds. This is expected behavior until `ios-root.img` is flashed.
-- **Root Cause & Fix for Touch Controller (`S3706`):**
-  - In `bb8822d`, `touch_write_reg` timed out (`err=60 seen=0x40000000`) because QUPv3 SE17 (`0x00c80000`) has `SE_FIFO_IF_DISABLE_RO = 1` enforced in hardware/qupfw.
-  - In commit `e01e6f2` (CI run `41448032138`), `bsd/dev/sweet_touch.c` was updated to drive I2C via open-drain GPIO bit-bang on TLMM South GPIO 55 (SDA) and GPIO 56 (SCL), bypassing the locked FIFO interface entirely.
-  - Kernel artifact (`53d0e54b20885d5b...`) downloaded and packaged into `shim/out/shim-boot-0082.img` with `sweettouchdelay=0` and `sweetkeys=1`.
-- **Next concrete action:** Boot `shim/out/shim-boot-0082.img` in fastboot to verify S3706 GPIO I2C probe and touch response.
+**GM1901 Option B: iOS 16 Root Image Creation & Userdata Flash Preparation:**
+- **S3706 Touch & Root Mount Panic Analysis Completed:**
+  - Photo logs (`uploaded_media_1793634166186.jpg`) confirm XNU boots through all hardware drivers: 8 CPUs (`cpus=8`), AppleCLCD display (`1080x2340`), SPMI buttons (`SWEET KEYS`), and HID touch registration.
+  - The ~5-second black screen shutdown was confirmed as XNU's automatic panic reboot timer (`debug=0xc` / `DB_REBOOT = 0x8`) triggered by `vfs_mountroot` failing to mount root on Android `userdata`.
+  - Bare-metal hardware test in `shim/shim.c` verified Synaptics `S3706` I2C on GPIO 55/56 (`PROBE ack=0`, `F01`, `F12`, `FINGER` event logged).
+- **iOS 16 Root Image Workflow on macOS:**
+  - Extracted 3 DMGs from `/Users/nguyendinhkhanh/Downloads/iPhone10,3,iPhone10,6_16.6.1_20G81_Restore.ipsw` to `/Users/nguyendinhkhanh/Downloads/ipsw_dmgs/`:
+    - `096-57693-083.dmg` (OS root, 4.4 GiB)
+    - `096-57293-083.dmg` (SystemOS cryptex, 2.6 GiB)
+    - `096-57613-084.dmg` (AppOS cryptex, 10 MiB)
+  - Created [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py): native macOS builder using `hdiutil`, `newfs_hfs -s -J -v iOSRoot`, `rsync -aH`, dyld shared cache hard-linking, logd `.migrated` markers, system keybag, and `sweet-root-tweaks.py`.
+- **Next concrete action:**
+  1. User runs `sudo python3 tools/mkiosroot_macos.py` in Terminal to generate the 16 GiB `ios-root-16g.img`.
+  2. Confirm with user before flashing `userdata` via `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.img`.
+  3. Boot `shim/out/shim-boot-0082.img` with `rd=ufsroot0 ufsrw=1 rootrw=1 debug=0x1` to enter iOS 16 userland.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
