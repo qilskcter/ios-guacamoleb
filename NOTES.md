@@ -1,6 +1,17 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## Active handoff update (2026-10-21)
+## Active handoff update (2026-11-02)
+
+**GM1901 S3706 Touch Controller Bring-Up & Root Mount Panic Analysis:**
+- **Clarification on ~5s Black Screen Reboot:**
+  - Photo logs confirm XNU initializes all subsystems cleanly (8-core SMP Kryo 485, Display Framebuffer `1080x2340`, SPMI buttons, UFS DMA, and RPMh `ldoa17` 3008 mV).
+  - Boot reaches `cannot mount root, errno = 19` after 7 failed attempts (`unknown Volume Signature : 5adf` / `b284` because `userdata` is currently formatted as Android ext4/f2fs).
+  - Under `debug=0x8`, XNU halts with panic and automatically triggers a warm reboot after ~5 seconds. This is expected behavior until `ios-root.img` is flashed.
+- **Root Cause & Fix for Touch Controller (`S3706`):**
+  - In `bb8822d`, `touch_write_reg` timed out (`err=60 seen=0x40000000`) because QUPv3 SE17 (`0x00c80000`) has `SE_FIFO_IF_DISABLE_RO = 1` enforced in hardware/qupfw.
+  - In commit `e01e6f2` (CI run `41448032138`), `bsd/dev/sweet_touch.c` was updated to drive I2C via open-drain GPIO bit-bang on TLMM South GPIO 55 (SDA) and GPIO 56 (SCL), bypassing the locked FIFO interface entirely.
+  - Kernel artifact (`53d0e54b20885d5b...`) downloaded and packaged into `shim/out/shim-boot-0082.img` with `sweettouchdelay=0` and `sweetkeys=1`.
+- **Next concrete action:** Boot `shim/out/shim-boot-0082.img` in fastboot to verify S3706 GPIO I2C probe and touch response.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
