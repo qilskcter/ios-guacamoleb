@@ -2,20 +2,26 @@
 
 ## Active handoff update (2026-11-03)
 
-**🎉🎉 HISTORIC MILESTONE: APPLE LOGO & PROGRESS BAR ON ONEPLUS 7 (GM1901)!**
-- **Userland Boot Verification (`uploaded_media_1793642405071.jpg`):**
+**🎉🎉 HISTORIC MILESTONE: FULL TOUCH & BUTTON INTERACTION IN iOS 16 ON ONEPLUS 7!**
+- **Userland Boot & Live Input Verification (`uploaded_media_1793644039792.jpg`, `uploaded_media_1793644192466.jpg`):**
   - Booted `shim/out/shim-boot-0082.img` with verified iOS parameters:
     `serial=3 debug=0xc cpus=8 keepsyms=1 -enable_kprintf_spam -noprogress sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`
-  - Kernel cleanly mounted `iOSRoot` on internal UFS `userdata` (`rd=ufsroot0`), started `/sbin/launchd` (PID 1).
+  - Kernel cleanly mounted `iOSRoot` on internal UFS `userdata` (`rd=ufsroot0`), launched `/sbin/launchd` (PID 1).
   - Apple boot logo and horizontal progress bar rendered on the `1080x2340` AMOLED display!
-  - Progress bar is advancing as system daemons initialize.
-- **Hardware Architecture Summary on GM1901:**
-  - 8 Kryo 485 CPUs SMP online via PSCI (`cpus=8`).
-  - Native display via `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`).
-  - UFS DMA root filesystem on `sda19` (`userdata`, 16 GiB HFS+).
-  - Hardware buttons (PM8150 SID 0 GPIO6/GPIO7) & Synaptics S3706 touch controller ready.
+  - **Live Hardware Button Verification:**
+    `SWEET KEYS: key=0 down=1 pon=0x5 gpio6=0x1 gpio7=0x1`
+    `SWEET HID: key 0x30 down (1 clients)` -> `backboardd` connected and actively receiving power key events.
+  - **Live Touchscreen Controller Verification:**
+    `SWEET HID: touch 0 down at 271,1735` -> Synaptics S3706 bit-bang I2C driver on TLMM GPIO 55/56 successfully reads touch coordinates and dispatches directly to `backboardd` digitizer event stream!
+- **All 6 Subsystems Confirmed Working on OnePlus 7 (`GM1901`):**
+  1. 8-core Kryo 485 SMP CPUs online (`cpus=8`, SGI1).
+  2. Framebuffer display via `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`).
+  3. Internal UFS DMA storage (`userdata` partition, 16 GiB HFS+ read-write).
+  4. SPMI hardware keys (Power `key=0`, Vol Up `key=1`, Vol Down `key=2`).
+  5. Synaptics S3706 multi-touch controller (GPIO 55/56 I2C, coordinates verified in userland).
+  6. iOS 16 userland execution (`launchd`, `backboardd` active).
 - **Next concrete action:**
-  - Wait for the progress bar to finish filling and watch for the iOS 16 Hello / SpringBoard home screen.
+  - Let initial `datamigrator` complete to transition from the 100% progress screen to `SpringBoard`.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
