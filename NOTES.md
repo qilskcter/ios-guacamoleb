@@ -58,7 +58,19 @@
     - `bsd/dev/sweet_touch.c`: GENI SE17 I2C (`0x00c80000`, Wrapper 2 `s0`), GCC vote `0x52014` (`0x1f`) + RCG `0x1e148` + branches `0x1e004`/`0x1e008`/`0x1e144`, TLMM SOUTH (`0x03d00000`) GPIOs 54 (Reset), 55 (SDA), 56 (SCL), 119 (1.8V enable), 122 (IRQ), and Synaptics S3706 RMI4 Page 0 F01 (`0xe3`) + F12 (`0xdd`) 10-finger polling at slave `0x20`.
     - `bsd/dev/sweet_usb.c`: updated SM8150 GCC USB CBCR offsets (`cfg-noc-axi = 0x0f078`, `aggre-axi = 0x0f07c`, `clkref = 0x8c008`).
     - Verified full patch sequence `0001..0082` applies cleanly with `patch -p1 --fuzz=0`, and cross-compile syntax-checked the patched C drivers with `clang -target arm64-apple-darwin -fsyntax-only -Wall -Wextra -Werror`.
-- **Next concrete step:** Trigger GitHub Actions `xnu.yml` to build `kernel.development.sweet` with `0082-gm1901-drivers.patch`, package with `tools/mkpayload.py` + `./shim/build.sh`, and test-boot `shim/out/shim-boot.img` (or `shim/out/shim-boot-oos.img`) via `fastboot boot` on the OnePlus 7 (`GM1901`).
+- **Full Device Backup, Milestone 1 Hardware Verification, and CI Kernel Build `0082` (2026-11-02, commit `2d36954`, CI run `41425173433`):**
+  - **Connected OnePlus 7 (`GM1901` / `guacamoleb`) live hardware dump & full backup (untracked in `backup/gm1901/` and `dtb/live-gm1901.dtb`):**
+    - Device runs Evolution X Android 16 (`guacamoleb-userdebug 16 BP2A.250805.005`, active slot `_b`, `hw_version = 14`), 8 GiB RAM (`0x80000000..0xffffffff` + `0x100000000..0x27fffffff`), 256 GiB UFS (`sda19` = `userdata` on LUN 0, `226.8 GiB`).
+    - Backed up and SHA-256 verified **111 items** in `backup/gm1901/SHA256SUMS.txt`: 4 full raw LUN images (`LUN_sdb_full.img` XBL A, `LUN_sdc_full.img` XBL B, `LUN_sdd_full.img` CDT/DDR, `LUN_sdf_full.img` EFS/modemst1/modemst2/fsg/fsc), 2 primary GPT headers (`GPT_sda_primary.bin`, `GPT_sde_primary.bin`), and 105 `/dev/block/by-name/*` partitions (`persist.img`, `modemst1.img`, `modemst2.img`, `fsg.img`, `fsc.img`, `param.img`, `oem_dycnvbk.img`, `oem_stanvbk.img`, `xbl_a/b.img`, `abl_a/b.img`, `boot_a/b.img`, `dtbo_a/b.img`, `vbmeta_a/b.img`, `modem_a/b.img`, `tz_a/b.img`, `hyp_a/b.img`, etc.).
+    - Live `/proc/iomem` and `/sys/bus/i2c/devices` confirmed all MMIO bases in `0082-gm1901-drivers.patch`: touch controller `5-0020 -> c80000.i2c/i2c-5/5-0020` (Synaptics S3706 at `0x20` on `0x00c80000`), `ufs_mem` `0x01d84000`, `pinctrl` `0x03000000`, `dwc3` `0x0a600000`, `hsusb_phy_base` `0x088e2000`, `pshold` `0x0c264000`, SPMI `0x0c440000`/`0x0e600000`/`0x0c40a000`, RPMh `0x18220000`/`0x18220d00`.
+  - **Milestone 1 Hardware Boot Test (`shim/out/shim-boot.img`) — PASSED:**
+    - Booted `shim/out/shim-boot.img` in RAM (`fastboot boot shim/out/shim-boot.img`).
+    - User confirmed ("có") that the red diagnostic console rendered cleanly on the `1080 x 2340` display (`0x9c000000`), initialized UFS at `0x01d84000`, and listed the LUN 0 GPT partitions including `userdata`. After the 60-second diagnostic delay, `PSCI_SYSTEM_RESET` cleanly rebooted the phone back into Android 16.
+  - **GitHub Actions XNU Kernel Build `0082` (`41425173433`) & ADT Packaging:**
+    - CI run `41425173433` on `qilskcter/ios-sweet` built `kernel.development.sweet` with [`xnu/patches/0082-gm1901-drivers.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0082-gm1901-drivers.patch) in `6m49s` with zero errors; downloaded to `xnu/out-0082/kernel.development.sweet`.
+    - Extracted and LZFSE-decompressed `DeviceTree.d22ap.im4p` from iPhone X `20H392` IPSW to `research/ipsw-x/d22ap.adt` (`186,084` bytes) and generated `shim/out/gm1901.adt` (`--highmem`, `12,604` bytes) and `shim/out/gm1901-low.adt`.
+    - Packaged `xnu/out-0082/kernel.development.sweet` + `shim/out/gm1901.adt` (`ufsrw=0 rootrw=0`) into `shim/out/shim-boot-0082.img` (`26 MiB`) and booted via `fastboot boot shim/out/shim-boot-0082.img`.
+- **Next concrete step:** Verify on-screen XNU `0082` console output (`SWEET EARLY`, `SWEET CPU`, `SWEET UFS`, `SWEET KEYS`, `SWEET TOUCH`, `SWEET USB`) from the read-only `shim-boot-0082.img` boot test on GM1901.
 
 ## Previous handoff update (2026-10-20)
 
