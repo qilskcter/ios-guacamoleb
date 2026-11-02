@@ -213,15 +213,16 @@
  
  #define SE_STATUS       0x040u
  #define SE_MCLK         0x048u
-@@ -75,6 +74,7 @@
+@@ -75,6 +74,8 @@
  	vm_offset_t se, gcc, gpio;
  	bool started, dead, probing;
  	int kind, irq_hint;
++	unsigned sda_pin, scl_pin;
 +	uint8_t f01_cmd, f01_ctrl, f01_data, f12_ctrl, f12_data;
  	uint32_t irq_status, irq_last, active;
  	unsigned sent, got;
  	int x[TOUCH_MAX], y[TOUCH_MAX];
-@@ -136,8 +136,8 @@
+@@ -136,8 +137,8 @@
  static bool
  touch_clocks(void)
  {
@@ -232,7 +233,7 @@
  	touch_wr(st.gcc, TOUCH_GCC_VOTE, touch_rd(st.gcc, TOUCH_GCC_VOTE) | mask);
  	uint32_t dfs = touch_rd(st.gcc, TOUCH_RCG + 0x14u);
  	uint32_t cfg = touch_rd(st.gcc, TOUCH_RCG + 4u);
-@@ -160,7 +160,9 @@
+@@ -160,9 +161,11 @@
  			return false;
  		}
  	}
@@ -244,37 +245,246 @@
 +		if (!(touch_rd(st.gcc, branches[i]) & 2u) &&
 +		    !touch_wait_clear(st.gcc, branches[i], 1u << 31)) {
  			printf("SWEET TOUCH: GCC branch %#x halted (%#x)\n", branches[i],
-@@ -209,16 +209,16 @@
+ 			    touch_rd(st.gcc, branches[i]));
+ 			return false;
+@@ -209,86 +212,167 @@
  	return st.irq_last;
  }
  
 -/* One Linux-style FIFO message. TX is at most 3 bytes; RX at most 90. */
-+/* One Linux-style FIFO message. TX is at most 4 bytes; RX at most 90. */
- static int
- touch_msg_run(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
-     unsigned nr, bool stretch)
+-static int
+-touch_msg_run(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
+-    unsigned nr, bool stretch)
++static void
++touch_i2c_sda_hi(void)
  {
 -	if (st.dead || nt > 3 || nr > 90 || (nt && nr) || (!nt && !nr)) {
-+	if (st.dead || nt > 4 || nr > 90 || (nt && nr) || (!nt && !nr)) {
- 		return EIO;
+-		return EIO;
++	touch_wr(st.gpio, TOUCH_GPIO_CFG(st.sda_pin), 3u | (1u << 6));
++}
++
++static void
++touch_i2c_sda_lo(void)
++{
++	touch_wr(st.gpio, TOUCH_GPIO_IO(st.sda_pin), 0);
++	touch_wr(st.gpio, TOUCH_GPIO_CFG(st.sda_pin), 3u | (1u << 6) | 0x200u);
++}
++
++static bool
++touch_i2c_scl_hi(void)
++{
++	touch_wr(st.gpio, TOUCH_GPIO_CFG(st.scl_pin), 3u | (1u << 6));
++	for (unsigned i = 0; i < 1000; ++i) {
++		if (touch_rd(st.gpio, TOUCH_GPIO_IO(st.scl_pin)) & 1u) {
++			return true;
++		}
++		delay(1);
  	}
- 	if (!touch_wait_clear(st.se, SE_STATUS, 1u)) {
+-	if (!touch_wait_clear(st.se, SE_STATUS, 1u)) {
 -		st.dead = true; /* no other SE7 owner is supported */
-+		st.dead = true; /* no other SE17 owner is supported */
- 		return EBUSY;
- 	}
- 	touch_wr(st.se, SE_IRQ_CLR, 0xffffffffu);
-@@ -231,9 +231,6 @@
- 		uint32_t irq = touch_irq();
- 		if (irq & SE_ERRORS) {
- 			err = (irq & SE_NACK) ? ENXIO : EIO;
+-		return EBUSY;
+-	}
+-	touch_wr(st.se, SE_IRQ_CLR, 0xffffffffu);
+-	touch_wr(st.se, SE_TX_WM, nt ? 1u : 0u);
+-	touch_wr(st.se, nr ? SE_RX_LEN : SE_TX_LEN, nr ? nr : nt);
+-	touch_wr(st.se, SE_CMD, ((nr ? 2u : 1u) << 27) |
+-	    ((uint32_t)addr << 9) | (stretch ? 4u : 0u));
+-	int err = ETIMEDOUT;
+-	for (unsigned i = 0; i < 20000; ++i) {
+-		uint32_t irq = touch_irq();
+-		if (irq & SE_ERRORS) {
+-			err = (irq & SE_NACK) ? ENXIO : EIO;
 -			/* A completed NACK is normal during address probing. Aborting an
 -			 * idle sequencer may never produce ABORT_DONE. Wait for completion
 -			 * and leave a clean idle engine available for the other IC. */
- 			for (unsigned j = 0; j < 5000 && !(irq & SE_DONE); ++j) {
- 				delay(1);
- 				irq = touch_irq();
-@@ -318,51 +315,10 @@
+-			for (unsigned j = 0; j < 5000 && !(irq & SE_DONE); ++j) {
+-				delay(1);
+-				irq = touch_irq();
+-			}
+-			if ((irq & SE_DONE) && !(touch_rd(st.se, SE_STATUS) & 1u) &&
+-			    !(touch_rd(st.se, SE_TX_COUNT) & 0xfffffffu) &&
+-			    !(touch_rd(st.se, SE_RX_COUNT) & 0x1ffffffu)) {
+-				touch_wr(st.se, SE_IRQ_CLR, irq);
+-				return err;
+-			}
+-			break;
++	return false;
++}
++
++static void
++touch_i2c_scl_lo(void)
++{
++	touch_wr(st.gpio, TOUCH_GPIO_IO(st.scl_pin), 0);
++	touch_wr(st.gpio, TOUCH_GPIO_CFG(st.scl_pin), 3u | (1u << 6) | 0x200u);
++}
++
++static void
++touch_i2c_start(void)
++{
++	touch_i2c_sda_hi();
++	delay(2);
++	(void)touch_i2c_scl_hi();
++	delay(2);
++	touch_i2c_sda_lo();
++	delay(2);
++	touch_i2c_scl_lo();
++	delay(2);
++}
++
++static void
++touch_i2c_stop(void)
++{
++	touch_i2c_sda_lo();
++	delay(2);
++	(void)touch_i2c_scl_hi();
++	delay(2);
++	touch_i2c_sda_hi();
++	delay(2);
++}
++
++static bool
++touch_i2c_tx_byte(uint8_t b)
++{
++	for (int bit = 7; bit >= 0; --bit) {
++		if (b & (1u << bit)) {
++			touch_i2c_sda_hi();
++		} else {
++			touch_i2c_sda_lo();
+ 		}
+-		if (nt && !st.sent && (irq & SE_TX_WM_IRQ)) {
+-			uint32_t word = 0;
+-			for (unsigned j = 0; j < nt; ++j) {
+-				word |= (uint32_t)tx[j] << (8u * j);
+-			}
+-			touch_wr(st.se, SE_TX, word);
+-			st.sent = nt;
+-			touch_wr(st.se, SE_TX_WM, 0);
++		delay(1);
++		if (!touch_i2c_scl_hi()) {
++			return false;
+ 		}
+-		uint32_t count = touch_rd(st.se, SE_RX_COUNT) & 0x1ffffffu;
+-		if (count > 64 || count > (nr - st.got + 3u) / 4u) {
+-			err = EIO;
+-			break;
++		delay(2);
++		touch_i2c_scl_lo();
++		delay(1);
++	}
++	touch_i2c_sda_hi();
++	delay(1);
++	if (!touch_i2c_scl_hi()) {
++		return false;
++	}
++	bool ack = !(touch_rd(st.gpio, TOUCH_GPIO_IO(st.sda_pin)) & 1u);
++	delay(2);
++	touch_i2c_scl_lo();
++	delay(1);
++	return ack;
++}
++
++static bool
++touch_i2c_rx_byte(bool ack, uint8_t *out)
++{
++	uint8_t b = 0;
++	touch_i2c_sda_hi();
++	for (int bit = 7; bit >= 0; --bit) {
++		delay(1);
++		if (!touch_i2c_scl_hi()) {
++			return false;
+ 		}
+-		while (count--) {
+-			uint32_t word = touch_rd(st.se, SE_RX);
+-			for (unsigned j = 0; j < 4 && st.got < nr; ++j) {
+-				rx[st.got++] = (uint8_t)(word >> (8u * j));
+-			}
++		delay(1);
++		if (touch_rd(st.gpio, TOUCH_GPIO_IO(st.sda_pin)) & 1u) {
++			b |= (uint8_t)(1u << bit);
+ 		}
+-		/* DONE is checked after draining RX, so final short words aren't lost. */
+-		if (irq & SE_DONE) {
+-			/* Re-sample after the final drain; a late error must beat DONE. */
+-			irq = touch_irq();
+-			if (irq & SE_ERRORS) {
+-				continue;
+-			}
+-			touch_wr(st.se, SE_IRQ_CLR, irq);
+-			if (st.got == nr && st.sent == nt) {
+-				return 0;
+-			}
+-			err = EIO;
+-			break;
+-		}
+-		/* Preserve DONE/errors if they arrive during this iteration. */
+-		touch_wr(st.se, SE_IRQ_CLR, irq & (SE_RX_WM_IRQ | SE_RX_LAST | SE_TX_WM_IRQ));
+ 		delay(1);
++		touch_i2c_scl_lo();
+ 	}
+-	touch_abort();
+-	return err;
++	if (ack) {
++		touch_i2c_sda_lo();
++	} else {
++		touch_i2c_sda_hi();
++	}
++	delay(1);
++	if (!touch_i2c_scl_hi()) {
++		touch_i2c_sda_hi();
++		return false;
++	}
++	delay(2);
++	touch_i2c_scl_lo();
++	touch_i2c_sda_hi();
++	delay(1);
++	*out = b;
++	return true;
+ }
+ 
++/* Open-drain TLMM GPIO I2C message (bypasses SE17 GSI-only FIFO lock). */
+ static int
++touch_msg_run(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
++    unsigned nr, bool stretch)
++{
++	(void)touch_abort;
++	(void)touch_irq;
++	if (st.dead || nt > 4 || nr > 90 || (nt && nr) || (!nt && !nr)) {
++		return EIO;
++	}
++	if (!st.sda_pin) {
++		st.sda_pin = 55u;
++		st.scl_pin = 56u;
++	}
++	touch_i2c_start();
++	if (!touch_i2c_tx_byte((uint8_t)((addr << 1) | (nr ? 1u : 0u)))) {
++		touch_i2c_stop();
++		return ENXIO;
++	}
++	for (unsigned i = 0; i < nt; ++i) {
++		if (!touch_i2c_tx_byte(tx[i])) {
++			touch_i2c_stop();
++			return ENXIO;
++		}
++		st.sent = i + 1u;
++	}
++	for (unsigned i = 0; i < nr; ++i) {
++		if (!touch_i2c_rx_byte(i + 1u < nr, &rx[i])) {
++			touch_i2c_stop();
++			return ETIMEDOUT;
++		}
++		st.got = i + 1u;
++	}
++	if (!stretch) {
++		touch_i2c_stop();
++	}
++	return 0;
++}
++
++static int
+ touch_msg(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
+     unsigned nr, bool stretch)
+ {
+@@ -318,53 +402,12 @@
  }
  
  static int
@@ -283,8 +493,10 @@
  {
 -	const uint8_t ack[3] = {GOODIX_EVENT_REG >> 8, GOODIX_EVENT_REG & 0xffu, 0};
 -	return touch_msg(0x5d, ack, sizeof(ack), NULL, 0, false);
--}
--
++	const uint8_t tx[2] = {reg, val};
++	return touch_msg(addr, tx, sizeof(tx), NULL, 0, false);
+ }
+ 
 -/* Raw read only: 0x8240 is the vendor's generic/older VERSION candidate,
 - * not a second accepted GT9896 identity. Never try a four-byte Berlin pointer:
 - * on this 16-bit IC the extra bytes would be register data writes. */
@@ -324,12 +536,12 @@
 -		sum += buf[i];
 -	}
 -	return (sum & 0xffffu) == touch_be16(buf + len - 2);
-+	const uint8_t tx[2] = {reg, val};
-+	return touch_msg(addr, tx, sizeof(tx), NULL, 0, false);
- }
- 
+-}
+-
  static void
-@@ -383,106 +341,112 @@
+ touch_report(uint32_t mask, const int *x, const int *y)
+ {
+@@ -383,106 +426,116 @@
  	st.active = mask;
  }
  
@@ -355,26 +567,37 @@
 -	int x[TOUCH_MAX] = {0}, y[TOUCH_MAX] = {0};
 -	uint32_t mask = 0;
 -	int err = touch_read(0x5d, GOODIX_EVENT_REG, true, buf, GOODIX_HEAD_LEN);
-+	uint8_t pdt_f01[6] = {0}, pdt_f12[6] = {0}, status[2] = {0}, ctrl = 0;
-+	int err = ENXIO;
-+	for (unsigned attempt = 0; attempt < 5; ++attempt) {
-+		err = touch_write_reg(S3706_I2C_ADDR, 0xff, 0x00);
-+		if (!err) {
-+			break;
-+		}
-+		touch_wait(50);
-+	}
- 	if (err) {
+-	if (err) {
 -		return err;
-+		printf("SWEET TOUCH: S3706 page0 select failed err=%d\n", err);
-+		return false;
- 	}
+-	}
 -	if (!(buf[0] & 0x80u)) {
 -		/* Do not acknowledge firmware/config requests that we cannot service. */
 -		if (buf[0] & 0x40u) {
 -			return ENOTSUP;
--		}
++	uint8_t pdt_f01[6] = {0}, pdt_f12[6] = {0}, status[2] = {0}, ctrl = 0;
++	int err = ENXIO;
++	st.sda_pin = 55u;
++	st.scl_pin = 56u;
++	for (unsigned attempt = 0; attempt < 5; ++attempt) {
++		err = touch_write_reg(S3706_I2C_ADDR, 0xff, 0x00);
++		if (!err) {
++			break;
+ 		}
 -		return 0; /* no new touch frame: retain current contacts */
++		st.sda_pin = (attempt & 1u) ? 55u : 56u;
++		st.scl_pin = (attempt & 1u) ? 56u : 55u;
++		touch_wait(30);
+ 	}
+-	if (!touch_checksum(buf, GOODIX_HEAD_LEN)) {
+-		return EIO; /* header untrusted: no write to the IC */
++	if (err) {
++		printf("SWEET TOUCH: S3706 page0 select failed err=%d\n", err);
++		return false;
+ 	}
+-	unsigned n = buf[2] & 15u;
+-	if (n > TOUCH_MAX) {
+-		(void)touch_goodix_ack();
+-		return EIO;
 +	int e01 = touch_read(S3706_I2C_ADDR, 0xe3, false, pdt_f01, sizeof(pdt_f01));
 +	int e12 = touch_read(S3706_I2C_ADDR, 0xdd, false, pdt_f12, sizeof(pdt_f12));
 +	printf("SWEET TOUCH: S3706 PDT F01(err=%d fn=%#x cmd=%#x ctrl=%#x data=%#x) "
@@ -384,23 +607,11 @@
 +	if (e01 || e12) {
 +		return false;
  	}
--	if (!touch_checksum(buf, GOODIX_HEAD_LEN)) {
--		return EIO; /* header untrusted: no write to the IC */
--	}
--	unsigned n = buf[2] & 15u;
--	if (n > TOUCH_MAX) {
--		(void)touch_goodix_ack();
--		return EIO;
--	}
 -	if (n) {
 -		err = touch_read(0x5d, GOODIX_EVENT_REG + GOODIX_HEAD_LEN, true,
 -		    buf + GOODIX_HEAD_LEN, n * GOODIX_POINT_LEN + 2u);
 -		if (err) {
 -			return err;
--		}
--		if (!touch_checksum(buf + GOODIX_HEAD_LEN, n * GOODIX_POINT_LEN + 2u)) {
--			(void)touch_goodix_ack();
--			return EIO;
 +	if (pdt_f01[5] == 0x01u && pdt_f12[5] == 0x12u) {
 +		st.f01_cmd = pdt_f01[1];
 +		st.f01_ctrl = pdt_f01[2];
@@ -427,6 +638,10 @@
 +				st.f12_data = d[3];
 +			}
  		}
+-		if (!touch_checksum(buf + GOODIX_HEAD_LEN, n * GOODIX_POINT_LEN + 2u)) {
+-			(void)touch_goodix_ack();
+-			return EIO;
+-		}
  	}
 -	for (unsigned i = 0; i < n; ++i) {
 -		const uint8_t *p = buf + GOODIX_HEAD_LEN + i * GOODIX_POINT_LEN;
@@ -523,25 +738,66 @@
  	touch_report(mask, x, y);
  	return 0;
  }
-@@ -492,7 +447,7 @@
+@@ -492,56 +545,9 @@
  {
  	uint32_t fw = touch_rd(st.se, SE_FW);
  	uint32_t tx = touch_rd(st.se, SE_HW_TX), rx = touch_rd(st.se, SE_HW_RX);
 -	printf("SWEET TOUCH: se7 fw=%#x proto=%u status=%#x tx=%#x rx=%#x ios=%#x\n",
-+	printf("SWEET TOUCH: se17 fw=%#x proto=%u status=%#x tx=%#x rx=%#x ios=%#x\n",
++	printf("SWEET TOUCH: se17 fw=%#x proto=%u status=%#x tx=%#x rx=%#x ios=%#x fifo_dis=%u\n",
  	    fw, (fw >> 8) & 0xffu, touch_rd(st.se, SE_STATUS), tx, rx,
- 	    touch_rd(st.se, 0x908));
- 	if (((fw >> 8) & 0xffu) != 3u || (touch_rd(st.se, 0x64) & 1u) ||
-@@ -502,7 +457,7 @@
- 		return false;
- 	}
- 	if (touch_rd(st.se, SE_STATUS) & 0x1001u) {
+-	    touch_rd(st.se, 0x908));
+-	if (((fw >> 8) & 0xffu) != 3u || (touch_rd(st.se, 0x64) & 1u) ||
+-	    ((tx >> 24) & 0x3fu) != 32u || ((rx >> 24) & 0x3fu) != 32u ||
+-	    ((tx >> 16) & 0x3fu) < 2u || ((rx >> 16) & 0x3fu) < 2u) {
+-		printf("SWEET TOUCH: need ABL-loaded I2C firmware and 32-bit FIFOs; probes skipped\n");
+-		return false;
+-	}
+-	if (touch_rd(st.se, SE_STATUS) & 0x1001u) {
 -		printf("SWEET TOUCH: SE7 already busy; probes skipped\n");
-+		printf("SWEET TOUCH: SE17 already busy; probes skipped\n");
- 		return false;
- 	}
- 	touch_wr(st.se, 0xe18, 0); /* no GSI events */
-@@ -558,9 +513,9 @@
+-		return false;
+-	}
+-	touch_wr(st.se, 0xe18, 0); /* no GSI events */
+-	touch_wr(st.se, 0xe1c, 0); /* mask external IRQ routing; poll local status */
+-	touch_wr(st.se, 0x644, 0);
+-	touch_wr(st.se, SE_IRQ_CLR, 0xffffffffu);
+-	touch_wr(st.se, 0x648, 0xffffffffu);
+-	touch_wr(st.se, SE_DMA, 0);
+-	touch_wr(st.se, 0x28, touch_rd(st.se, 0x28) | 0x7fu);
+-	touch_wr(st.se, 0xe30, touch_rd(st.se, 0xe30) | 0x0fu);
+-	touch_wr(st.se, 0x24, 0x7f);
+-	touch_wr(st.se, 0x20, 1);
+-	touch_wr(st.se, SE_CLK_SEL, 0);
+-	touch_wr(st.se, SE_MCLK, (7u << 4) | 1u);
+-	touch_wr(st.se, SE_SCL, (10u << 20) | (11u << 10) | 26u); /* 100 kHz */
+-	/* Linux 8-bit I2C packing: MSB on the wire, LSB byte first in FIFO. */
+-	touch_wr(st.se, 0x254, 0);
+-	touch_wr(st.se, 0x260, SE_PACK0);
+-	touch_wr(st.se, 0x264, SE_PACK1);
+-	touch_wr(st.se, 0x284, SE_PACK0);
+-	touch_wr(st.se, 0x288, SE_PACK1);
+-	touch_wr(st.se, SE_TX_WM, 0);
+-	touch_wr(st.se, 0x810, 0);
+-	touch_wr(st.se, 0x814, ((rx >> 16) & 0x3fu) - 1u);
+-	touch_wr(st.se, SE_IRQ_EN, SE_EVENTS);
+-	printf("SWEET TOUCH: packing tx=%#x/%#x rx=%#x/%#x gran=%#x\n",
+-	    touch_rd(st.se, 0x260), touch_rd(st.se, 0x264),
+-	    touch_rd(st.se, 0x284), touch_rd(st.se, 0x288), touch_rd(st.se, 0x254));
+-	if (touch_rd(st.se, 0x260) != SE_PACK0 || touch_rd(st.se, 0x264) != SE_PACK1 ||
+-	    touch_rd(st.se, 0x284) != SE_PACK0 || touch_rd(st.se, 0x288) != SE_PACK1 ||
+-	    touch_rd(st.se, 0x254) != 0) {
+-		printf("SWEET TOUCH: packing readback mismatch; probes skipped\n");
+-		return false;
+-	}
+-	if ((touch_rd(st.se, SE_TX_COUNT) & 0xfffffffu) ||
+-	    (touch_rd(st.se, SE_RX_COUNT) & 0x1ffffffu)) {
+-		printf("SWEET TOUCH: inherited FIFO data; probes skipped\n");
+-		return false;
+-	}
++	    touch_rd(st.se, 0x908), touch_rd(st.se, 0x64) & 1u);
+ 	return true;
+ }
+ 
+@@ -558,9 +564,9 @@
  	(void)PE_parse_boot_argn("sweettouchdelay", &delay_s, sizeof(delay_s));
  	printf("SWEET TOUCH: starting in %u s\n", delay_s);
  	touch_wait(delay_s * 1000u);
@@ -553,7 +809,7 @@
  	st.se = ml_io_map(TOUCH_SE_PA, 0x4000);
  	if (!st.gcc || !st.gpio || !st.se) {
  		printf("SWEET TOUCH: MMIO mapping failed\n");
-@@ -569,53 +524,43 @@
+@@ -569,53 +575,43 @@
  	if (!touch_clocks() || !touch_se_init()) {
  		goto out;
  	}
@@ -568,7 +824,7 @@
 +	    touch_rd(st.gpio, TOUCH_GPIO_IO(54)), touch_rd(st.gpio, TOUCH_GPIO_IO(122)),
 +	    touch_rd(st.gpio, TOUCH_GPIO_IO(119)));
 +	/* Keep S3706 in reset while its rails settle; IRQ 122 stays an input. */
-+	touch_gpio(122, 0, 3, 0, false, false); /* IRQ input, 2 mA, pull-up */
++	touch_gpio(122, 0, 0, 3, false, false); /* IRQ input, 8 mA, bias-disable */
 +	touch_gpio(54, 0, 3, 3, true, false);   /* Reset active-low */
 +	int power_error = sweet_rpmh_vreg_enable("ldoa17", 3008);
  	if (power_error) {
@@ -586,10 +842,10 @@
 -	touch_gpio(8, 0, 3, 3, true, true);
 -	touch_wait(300); /* exceeds vendor 5 ms test + 95 ms post-test wait */
 -	uint8_t gid[32], legacy[32], fid1 = 0, fid2 = 0;
-+	touch_gpio(119, 0, 0, 1, true, true);   /* GM1901 tp_1v8 digital rail enable */
++	touch_gpio(119, 0, 3, 3, true, true);   /* GM1901 tp_1v8 digital rail enable */
 +	touch_wait(10);
-+	touch_gpio(55, 1, 0, 0, false, false);  /* SE17 I2C SDA, mux=1, 2 mA */
-+	touch_gpio(56, 1, 0, 0, false, false);  /* SE17 I2C SCL, mux=1, 2 mA */
++	touch_gpio(55, 0, 3, 1, false, false);  /* GPIO 55 open-drain I2C SDA */
++	touch_gpio(56, 0, 3, 1, false, false);  /* GPIO 56 open-drain I2C SCL */
 +	/* Release reset and wait for S3706 RMI4 firmware boot. */
 +	touch_gpio(54, 0, 3, 3, true, false);
 +	touch_wait(10);
