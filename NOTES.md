@@ -11,11 +11,12 @@
   - All partition backups, bootloaders, recovery, modem, persist remain intact.
 - **XNU Boot Executed:**
   - Booted `shim/out/shim-boot-0082.img` (`fastboot boot shim/out/shim-boot-0082.img`):
-    - Kernel: `xnu/out-0082/kernel.development.sweet` (commit `e01e6f2`)
-    - ADT: `shim/out/gm1901.adt`
-    - Cmdline: `serial=3 debug=0x1 cpus=8 keepsyms=1 sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0`
+    - Reached KDP debugger halt (`Waiting for remote debugger connection.`) because `debug=0x1` halted on unconfigured ignition boot flags.
+    - Repackaged `shim/out/shim-boot-0082.img` with verified iOS userland launch boot arguments:
+      `serial=3 debug=0xc cpus=8 keepsyms=1 -enable_kprintf_spam -noprogress sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`
 - **Next concrete action:**
-  - Check phone screen output for `hfs: mounted iOSRoot on device b(1, 0)` and `/sbin/launchd` start.
+  - User holds Power + Volume Down to enter Fastboot mode.
+  - Run `fastboot boot shim/out/shim-boot-0082.img` to launch iOS userland (dyld cache -> launchd -> SpringBoard).
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
