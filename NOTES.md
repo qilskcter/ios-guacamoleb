@@ -12,7 +12,7 @@
     - `096-57693-083.dmg` (OS root, 4.4 GiB)
     - `096-57293-083.dmg` (SystemOS cryptex, 2.6 GiB)
     - `096-57613-084.dmg` (AppOS cryptex, 10 MiB)
-  - Created [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py): native macOS builder using `hdiutil`, `newfs_hfs -s -J -v iOSRoot`, `rsync -aH`, dyld shared cache hard-linking, logd `.migrated` markers, system keybag, and `sweet-root-tweaks.py`.
+  - Created [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py): native macOS builder using `hdiutil`, `newfs_hfs -s -J -v iOSRoot`, `rsync -aH`, dyld shared cache hard-linking, logd `.migrated` markers, system keybag, and `sweet-root-tweaks.py` (fixed: removed redundant `diskutil enableOwnership` that errored with -69854 on raw BSD mount).
 - **Next concrete action:**
   1. User runs `sudo python3 tools/mkiosroot_macos.py` in Terminal to generate the 16 GiB `ios-root-16g.img`.
   2. Confirm with user before flashing `userdata` via `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.img`.
