@@ -30,7 +30,8 @@
   - GitHub Actions CI run `41684720212` succeeded in `7m02s` with zero errors.
   - Downloaded kernel to [`xnu/out-0084/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0084/kernel.development.sweet) (`16 MiB`).
   - Packaged [`shim/out/shim-boot-0084.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0084.img) (`26 MiB`) with complete standard boot arguments (`serial=3 debug=0xc cpus=8 keepsyms=1 sweetfb_noconsole=1 sweetfb_hz=60 sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`).
-  - Ready to boot via `fastboot boot shim/out/shim-boot-0084.img`.
+  - Successfully booted on device (`85d68e24`) via `fastboot boot shim/out/shim-boot-0084.img` (`Sending OKAY [0.615s]`, `Booting OKAY [0.080s]`).
+  - Live hardware acceleration and blur effect verification underway on GM1901 display.
 
 
 **🎉🎉🎉 HISTORIC BREAKTHROUGH: OFFICIAL iOS 16.6.1 GUI RUNNING ON ONEPLUS 7 (GM1901)!**
