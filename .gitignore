@@ -9,4 +9,7 @@ xnu/out/
 xnu/out-*/
 __pycache__/
 /firmware
+assets/
+image/
+logs/
 .DS_Store

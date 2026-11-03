@@ -155,52 +155,90 @@ def springboard_assets(root):
     os.chown(sb_dir, MOBILE, MOBILE)
     os.chmod(sb_dir, 0o755)
 
-    # 1. Icons layout: IconState.plist and DesiredIconState.plist
-    default_icon_plist = os.path.join(root, 'System/Library/CoreServices/SpringBoard.app/DefaultIconState~iphone.plist')
-    if not os.path.exists(default_icon_plist):
-        default_icon_plist = os.path.join(root, 'System/Library/CoreServices/SpringBoard.app/DefaultIconState.plist')
+    # 1. Clean Icons layout: pure bundle IDs without failing widgets
+    icon_data = {
+        'buttonBar': [
+            'com.apple.mobilephone',
+            'com.apple.mobilesafari',
+            'com.apple.MobileSMS',
+            'com.apple.Music',
+        ],
+        'iconLists': [
+            [
+                'com.apple.camera',
+                'com.apple.mobileslideshow',
+                'com.apple.AppStore',
+                'com.apple.Preferences',
+                'com.apple.Maps',
+                'com.apple.weather',
+                'com.apple.mobilenotes',
+                'com.apple.reminders',
+                'com.apple.mobiletimer',
+                'com.apple.mobilecal',
+                'com.apple.mobilemail',
+                'com.apple.facetime',
+                'com.apple.calculator',
+                'com.apple.Passbook',
+                'com.apple.Health',
+                'com.apple.stocks',
+                'com.apple.news',
+                'com.apple.podcasts',
+                'com.apple.tv',
+                'com.apple.iBooks',
+                'com.apple.shortcuts',
+                'com.apple.VoiceMemos',
+                'com.apple.compass',
+                'com.apple.measure',
+            ],
+            [
+                'com.apple.findmy',
+                'com.apple.Home',
+                'com.apple.Fitness',
+                'com.apple.Bridge',
+                'com.apple.MobileAddressBook',
+                'com.apple.Translate',
+                'com.apple.DocumentsApp',
+                'com.apple.freeform',
+                'com.apple.tips',
+                'com.apple.Magnifier',
+                'com.apple.MobileStore',
+                'com.apple.BarcodeScanner',
+                'com.apple.Batteries',
+                'com.apple.Diagnostics',
+                'com.apple.FieldTest',
+                'com.apple.ScreenTimeUnlock',
+                'com.apple.Sidecar',
+                'com.apple.Siri',
+                'com.apple.Spotlight',
+            ]
+        ]
+    }
+    for name in ('IconState.plist', 'DesiredIconState.plist'):
+        dst = os.path.join(sb_dir, name)
+        save(dst, icon_data, MOBILE, MOBILE, 0o600)
+        print('springboard icon state:', dst)
 
-    if os.path.exists(default_icon_plist):
-        icon_data = load(default_icon_plist)
-        for name in ('IconState.plist', 'DesiredIconState.plist'):
-            dst = os.path.join(sb_dir, name)
-            save(dst, icon_data, MOBILE, MOBILE, 0o600)
-            print('springboard icon state:', dst)
-
-    # 2. Official iOS 16 Wallpaper
-    wallpaper_src = '/private/tmp/ios16_wallpaper.jpg'
-    if os.path.exists(wallpaper_src):
+    # Force LaunchServices to re-scan all apps in /Applications
+    ls_cache = os.path.join(root, 'private/var/mobile/Library/Caches')
+    for f in glob.glob(os.path.join(ls_cache, 'com.apple.LaunchServices*.csstore')):
         try:
-            from PIL import Image
-            import struct
-            im = Image.open(wallpaper_src).convert('RGBA')
-            w, h = im.size
+            os.remove(f)
+            print('Removed stale LaunchServices cache:', f)
+        except OSError:
+            pass
 
-            # Save thumbnails
-            for name in ('HomeBackgroundThumbnail.jpg', 'LockBackgroundThumbnail.jpg'):
-                dst = os.path.join(sb_dir, name)
-                shutil.copy2(wallpaper_src, dst)
-                os.chown(dst, MOBILE, MOBILE)
-                os.chmod(dst, 0o644)
-                print('wallpaper thumb:', dst)
-
-            # Generate cpbitmap with 24-byte trailer
-            r, g, b, a = im.split()
-            bgra = Image.merge('RGBA', (b, g, r, a))
-            raw = bgra.tobytes()
-            trailer = struct.pack('<6i', 1, w, h, 0, 0, 0)
-            cpbitmap_data = raw + trailer
-
-            for name in ('HomeBackground.cpbitmap', 'LockBackground.cpbitmap',
-                         'OriginalHomeBackground.cpbitmap', 'OriginalLockBackground.cpbitmap'):
-                dst = os.path.join(sb_dir, name)
-                with open(dst, 'wb') as f:
-                    f.write(cpbitmap_data)
-                os.chown(dst, MOBILE, MOBILE)
-                os.chmod(dst, 0o644)
-                print('wallpaper cpbitmap:', dst)
-        except Exception as e:
-            print('Warning: could not generate wallpaper cpbitmap:', e)
+    # 2. Pre-generated official iOS 16 Wallpaper cpbitmaps & thumbnails
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    assets_dir = os.path.join(script_dir, '../assets/springboard')
+    if os.path.isdir(assets_dir):
+        for name in os.listdir(assets_dir):
+            s = os.path.join(assets_dir, name)
+            d = os.path.join(sb_dir, name)
+            if os.path.isfile(s):
+                shutil.copy2(s, d)
+                os.chown(d, MOBILE, MOBILE)
+                os.chmod(d, 0o644)
+                print('Installed springboard asset:', d)
 
 
 def main():
@@ -231,7 +269,11 @@ def main():
         'FBLaunchWatchdogExceptions': {'com.apple.purplebuddy': 100.0},
         'MCForceShowCloudConfigurationUI': False,
         'SBShowNonDefaultSystemApps': True,
-        'SBShowInternalApps': True})
+        'SBShowInternalApps': True,
+        'SBLockScreenShowWallpaper': True,
+        'SBHomeScreenShowWallpaper': True,
+        'SBReduceTransparencyEnabled': False,
+        'SBReduceMotionEnabled': False})
     merge_pref(root, 'com.apple.purplebuddy', {
         'SetupDone': True, 'SetupFinishedAllSteps': True, 'SetupVersion': 11,
         'daemonizeNeedsToRun': False})
