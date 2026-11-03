@@ -53,10 +53,10 @@
   - **Fix 2 (`mkiosroot_macos.py` sync):** Added explicit filesystem sync before unmounting and detaching target HFS+ image.
   - **Fix 3 (`sweet-root-tweaks.py` clean launchd):** Restored upstream `launchd` handling (removing `com.apple.CommCenter` and setting `_PanicOnCrasX`) via standard `plistlib.dump` binary format, which originally succeeded in booting SpringBoard at commit `0e728f3`.
   - Pushed in commit [`50ab5f9`](https://github.com/qilskcter/ios-sweet/commit/50ab5f9). Device `85d68e24` confirmed in fastboot mode.
-- **Zero-Filled Clean Rootfs Flashed & Boot Triggered (2026-11-03 20:35 - 20:40 local):**
+- **Zero-Filled Clean Rootfs Flashed & Boot Triggered (2026-11-03 20:35 - 20:42 local):**
   - Flashed `ios-root-16g.simg` built with `CHUNK_TYPE_FILL` (15/15 chunks, 11,074 MiB, total time 417.957s, OKAY). All zero blocks zero-filled onto internal UFS `userdata` partition.
   - Successfully booted `fastboot boot shim/out/shim-boot-0082.img` in RAM (`Sending OKAY [0.616s]`, `Booting OKAY [0.081s]`).
-  - Awaiting screen status and presentation on GM1901.
+  - **LIVE SUCCESS:** Device screen rendered the official Apple boot logo! Confirms `cs_invalid_page` completely eliminated, `libignition` succeeded, all 42 dyld shared cache slices mapped, and `launchd` / `ProgressUI` / `backboardd` userland is fully running.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
