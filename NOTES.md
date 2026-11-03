@@ -28,10 +28,11 @@
       2. Wrote `/var/mobile/Library/Preferences/ByHost/com.apple.migration.<UUID>.plist` for both upper and lowercase platform UUID `A9683613-3704-53F2-95D0-98A8FB574E78`.
       3. Created and pre-seeded `mobileactivationd` system container `D90C94C4-F94E-4FCF-8A28-A93BE3846D8E` with `data_ark.plist` (`-ActivationState: Activated`).
     - Added [`tools/build_ios_root.sh`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/build_ios_root.sh) (commit `b835e9c`) to automate building the patched 16 GiB HFS+ image, converting to Android sparse image (`.simg`), and cleaning up intermediate files.
-- **Patched Rootfs Flashed & Booted (2026-11-03 17:25 local):**
-  - Flashed updated `ios-root-16g.simg` (23 chunks, 393.7s, OKAY) containing bypass plists (`com.apple.DataMigration.plist`, `ByHost/com.apple.migration.<UUID>.plist`) and seeded `mobileactivationd` container.
-  - Successfully booted `fastboot boot shim/out/shim-boot-0082.img` in RAM (`Sending OKAY [0.614s]`, `Booting OKAY [0.081s]`).
-  - Observing SpringBoard presentation on GM1901 screen.
+- **Rebuilt Clean Rootfs Flashed & Booted (2026-11-03 18:01 local):**
+  - Rebuilt `ios-root-16g.simg` after cleanly unmounting all DMG volumes, ensuring 100% root ownership and unquarantined dyld cache.
+  - Flashed `ios-root-16g.simg` to `userdata` (23 chunks, 391.5s, OKAY).
+  - Booted `shim/out/shim-boot-0082.img` with `sweetfb_noconsole=1 sweetfb_hz=30` (`Sending OKAY [0.628s]`, `Booting OKAY [0.080s]`).
+  - Observing iOS 16 userland / SpringBoard presentation on GM1901 screen.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
