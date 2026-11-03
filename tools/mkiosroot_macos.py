@@ -31,7 +31,7 @@ def run_cmd(cmd, check=True, capture=True):
 
 
 def attach_dmg_readonly(dmg_path):
-    out = run_cmd(['hdiutil', 'attach', '-readonly', '-nobrowse', '-owners', 'on', '-plist', dmg_path])
+    out = run_cmd(['hdiutil', 'attach', '-readonly', '-nobrowse', '-plist', dmg_path])
     info = plistlib.loads(out.encode())
     mount_point = None
     dev_entry = None

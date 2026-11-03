@@ -73,27 +73,13 @@ def byhost_pref(root, name, values):
 
 def launchd(root):
     path = os.path.join(root, 'System/Library/xpc/launchd.plist')
-    st = os.stat(path)
-    plist = load(path)
-    jobs = plist['LaunchDaemons']
-    renamed = 0
-    for job in jobs.values():
-        if '_PanicOnCrash' in job:
-            job['_PanicOnCrasX'] = job.pop('_PanicOnCrash')
-            renamed += 1
-    removed = [k for k, j in jobs.items() if j.get('Label') == 'com.apple.CommCenter']
-    for k in removed:
-        del jobs[k]
-    # Use plutil to generate canonical Apple binary plist
-    xml_path = path + '.tmp.xml'
-    with open(xml_path, 'wb') as f:
-        plistlib.dump(plist, f, fmt=plistlib.FMT_XML)
-    subprocess.run(['plutil', '-convert', 'binary1', '-o', path, xml_path], check=True)
-    if os.path.exists(xml_path):
-        os.remove(xml_path)
-    os.chown(path, st.st_uid, st.st_gid)
-    os.chmod(path, st.st_mode & 0o7777)
-    print(f'launchd.plist: {renamed} _PanicOnCrash renamed, {len(removed)} CommCenter jobs removed (canonical binary1)')
+    with open(path, 'rb') as f:
+        data = f.read()
+    count = data.count(b'_PanicOnCrash')
+    new_data = data.replace(b'_PanicOnCrash', b'_PanicOnCrasX')
+    with open(path, 'wb') as f:
+        f.write(new_data)
+    print(f'launchd.plist: in-place patched {count} _PanicOnCrash -> _PanicOnCrasX (exact size {len(new_data)} B preserved)')
 
 
 def containers(root):
