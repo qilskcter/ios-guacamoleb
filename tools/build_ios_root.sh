@@ -15,6 +15,13 @@ echo " Building iOS 16 Root Image for OnePlus 7 (GM1901)"
 echo " Skipping DataMigration & Pre-seeding Activation"
 echo "=========================================================="
 
+echo "[0/3] Ejecting any lingering DMG mounts..."
+for m in /Volumes/SydneyG20G81* /Volumes/AppCryptex* /Volumes/iOSRoot*; do
+  if [ -d "$m" ]; then
+    diskutil eject "$m" 2>/dev/null || true
+  fi
+done
+
 echo "[1/3] Creating and patching 16 GiB HFS+ image..."
 python3 tools/mkiosroot_macos.py \
   "$DMG_DIR/096-57693-083.dmg" \
