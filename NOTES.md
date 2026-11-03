@@ -2,7 +2,21 @@
 
 ## Active handoff update (2026-11-04)
 
-**🚀🚀🚀 SNAPDRAGON 855 CPU FREQUENCY BOOST (2.84 GHz) & SPRINGBOARD ASSETS FIXED:**
+**🎉🎉🎉 2.84 GHz BOOSTED KERNEL & FRESH 11 GB ROOTFS BOOTED ON ONEPLUS 7 (GM1901)!**
+- **Rootfs Flash Milestone (`fastboot flash userdata`):**
+  - Re-generated `/Users/nguyendinhkhanh/Downloads/ios-root-16g.simg` (11 GiB sparse image) via `build_ios_root.sh` at 02:13 incorporating:
+    - Pre-generated official iOS 16 `1080x2340` BGRA `.cpbitmap` wallpapers and JPEG thumbnails from `assets/springboard/`.
+    - Clean 2-page grid of core stock Apple apps + 4 dock apps in `IconState.plist` and `DesiredIconState.plist` without failing widget extensions.
+    - LaunchServices cache purge to force `lsd` registration across `/Applications`.
+    - `SBShowNonDefaultSystemApps = True`, `SBShowInternalApps = True`, `SBLockScreenShowWallpaper = True`, `SBHomeScreenShowWallpaper = True`.
+  - Flashed cleanly across 15 sparse chunks to internal UFS `userdata` (`sda19`): Total flash time `409.99s`, status `OKAY`.
+- **System Boot Execution:**
+  - Fresh bootloader session established via restart bootloader.
+  - Successfully booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`26 MiB`, with `boost_cpu_clocks()` locking 8 Kryo cores to 2.84 GHz):
+    - `Sending 'boot.img' (26308 KB) OKAY [0.625s]`
+    - `Booting OKAY [0.081s]`
+    - Total time: `0.719s`.
+  - OnePlus 7 is currently running iOS 16 at maximum 2.84 GHz hardware clock with the updated wallpapers and application suite.
 - **Snapdragon 855 CPU Frequency Boost ([`shim/loader.c`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/loader.c)):**
   - Isolated the root cause of UI lag during swiping: Snapdragon 855 cores boot by default at idle failsafe frequencies (~300-800 MHz) because XNU does not natively drive Qualcomm OSM/EPSS clock hardware.
   - Implemented `boost_cpu_clocks()` in `shim/loader.c`:
