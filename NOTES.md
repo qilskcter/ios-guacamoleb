@@ -35,10 +35,11 @@
   - **Root Cause 3 (Build mismatch):** `sweet-root-tweaks.py` had hardcoded `BUILD = '20H392'` (16.7.16) instead of `20G81` (16.6.1 from the extracted IPSW). Added dynamic build detection from `SystemVersion.plist` so `datamigrator` immediately recognizes the system version as matching and skips all migration work.
   - Changes committed and pushed in commit [`1cdba1c`](https://github.com/qilskcter/ios-sweet/commit/1cdba1c).
   - Device `85d68e24` confirmed in fastboot mode (`fastboot devices -> 85d68e24 fastboot`).
-- **Next concrete action:**
-  - Build the corrected image: `sudo ./tools/build_ios_root.sh`
-  - Flash to userdata: `fastboot flash -S 512M userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg`
-  - Boot into SpringBoard: `fastboot boot shim/out/shim-boot-0082.img`
+- **Corrected Rootfs Flashed & Booted (2026-11-03 18:45 local):**
+  - Built clean `ios-root-16g.simg` (11.6 GB) with `-owners on`, canonical `launchd.plist` (`plutil -convert binary1`), and dynamic build version matching `20G81` (16.6.1).
+  - Flashed `ios-root-16g.simg` to `userdata` partition (`sda19`): all 23 chunks written successfully (`Total time: 392.799s`).
+  - Booted `shim/out/shim-boot-0082.img` with `sweetfb_noconsole=1 sweetfb_hz=30` (`Sending OKAY [0.625s]`, `Booting OKAY [0.081s]`).
+  - Awaiting live screen presentation from GM1901.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
