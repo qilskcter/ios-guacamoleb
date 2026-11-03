@@ -18,9 +18,10 @@
   - **Current System Status & Known Next Steps:**
     - **Display & Rendering:** Running cleanly via software rendering on `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`). Qualcomm Adreno 640 GPU hardware acceleration is currently inactive (unaccelerated framebuffer, expected for early bring-up).
     - **Storage:** 16 GiB HFS+ root on internal UFS `userdata` (`sda19`) running cleanly read-write.
-- **60 Hz Native Display & Pipeline Optimization (2026-11-03 21:16 local):**
+- **60 Hz Native Display & Pipeline Optimization (2026-11-03 21:16 - 21:20 local):**
   - Repackaged [`shim/out/shim-boot-0082.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0082.img) with `sweetfb_hz=60` to unlock full 60 FPS refresh rate on OnePlus 7 Fluid AMOLED.
-  - Device currently running live in iOS 16.6.1 userland. Ready for user to enter Fastboot mode (Power + Vol Down) for instant 60 FPS live verification.
+  - Successfully booted via `fastboot boot shim/out/shim-boot-0082.img` (`Sending OKAY [0.622s]`, `Booting OKAY [0.081s]`).
+  - Awaiting user observation of the 60 FPS UI fluidity and touch responsiveness on the Home Screen.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
