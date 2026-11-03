@@ -21,9 +21,9 @@ for m in /Volumes/SydneyG20G81* /Volumes/AppCryptex* /Volumes/iOSRoot*; do
     diskutil eject "$m" 2>/dev/null || true
   fi
 done
-hdiutil info | grep -E "/Volumes/(SydneyG20G81|AppCryptex|iOSRoot)" -B 5 | grep "/dev/disk" | awk '{print $1}' | while read -r d; do
+(hdiutil info 2>/dev/null | grep -E "/Volumes/(SydneyG20G81|AppCryptex|iOSRoot)" -B 5 | grep "/dev/disk" | awk '{print $1}' | while read -r d; do
   diskutil eject "$d" 2>/dev/null || true
-done
+done) || true
 
 echo "[1/3] Creating and patching 16 GiB HFS+ image..."
 python3 tools/mkiosroot_macos.py \
