@@ -46,7 +46,13 @@
 - **Finalized Rootfs Flashed & Booted (2026-11-03 19:49 local):**
   - Flashed finalized `ios-root-16g.simg` (with in-place patched `launchd.plist`, matching `20G81` migration markers, and clean dyld cache links) to `userdata` (`sda19`): all 23 chunks written successfully (`Total time: 391.794s`).
   - Booted `shim/out/shim-boot-0082.img` with `sweetfb_noconsole=1 sweetfb_hz=30` (`Sending OKAY [0.620s]`, `Booting OKAY [0.081s]`).
-  - Awaiting live presentation from GM1901 screen.
+  - Result: Screen log (`uploaded_media_1793710337665.jpg`) showed `CODE SIGNING: cs_invalid_page(0x102f50000): p=[1(launchd)] final status 0x22000800, allowing (remove VALID) page`, followed by `libignition` halting at `pivot src : n/a` with `subcode 0xb` (SIGSEGV).
+- **Decisive Root-Cause Analysis for `cs_invalid_page` & Memory Faults:**
+  - **Root Cause (Sparse Image DONT_CARE Corruption):** In [`tools/img2simg.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/img2simg.py), zero blocks were tagged with `CHUNK_TYPE_DONT_CARE` (`0xcac3`). Android fastboot specifications define `DONT_CARE` as blocks the client should skip writing, leaving existing flash sectors unchanged. On devices previously booted, residual HFS+ journal and runtime data remained on UFS userdata blocks, corrupting tail padding of binaries and libraries. Kernel verification failed on `/sbin/launchd` (`cs_invalid_page`), causing PAC/SIGSEGV crashes in PID 1.
+  - **Fix 1 (`img2simg.py` CHUNK_TYPE_FILL):** Replaced `CHUNK_TYPE_DONT_CARE` with `CHUNK_TYPE_FILL` (`0xcac2`) with 4-byte `0x00000000` fill. Fastboot now zero-fills all unallocated blocks on internal UFS, guaranteeing an exact 1:1 match with the raw HFS+ image without increasing sparse image size.
+  - **Fix 2 (`mkiosroot_macos.py` sync):** Added explicit filesystem sync before unmounting and detaching target HFS+ image.
+  - **Fix 3 (`sweet-root-tweaks.py` clean launchd):** Restored upstream `launchd` handling (removing `com.apple.CommCenter` and setting `_PanicOnCrasX`) via standard `plistlib.dump` binary format, which originally succeeded in booting SpringBoard at commit `0e728f3`.
+  - Pushed in commit [`50ab5f9`](https://github.com/qilskcter/ios-sweet/commit/50ab5f9). Device `85d68e24` confirmed in fastboot mode.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
