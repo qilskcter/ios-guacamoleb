@@ -2,6 +2,32 @@
 
 ## Active handoff update (2026-11-03)
 
+**🎉🎉🎉 ADRENO 640 HARDWARE ACCELERATION DRIVER (0084) & OFFICIAL iOS 16 SPRINGBOARD SUITE:**
+- **Adreno 640 Hardware Acceleration Driver ([`xnu/patches/0084-sweet-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-sweet-adreno-gpu.patch)):**
+  - Reverse-engineered GMU and GPU RSC sequences from OnePlus 7 OxygenOS 10 kernel (`Image_reloc.bin`) via MCP REA and Capstone (`a6xx_rpmh_power_on_gpu` at `0xffffff80088c5cd8` and `gmu_reg_write` at `0xffffff8008877730`).
+  - GMU base `0x02C6A000` (192 KB) and GPU base `0x02C00000` (256 KB) mapped via `ml_io_map`.
+  - Implemented 5-step hardware power-on sequence:
+    1. GMU RSC write `0x23b07` (reg offset `0x10c1c`) = `2` (trigger GPU RSC power-up).
+    2. Poll GMU RSC `0x23b08` (reg offset `0x10c20`) bit 1 (`& 2`) until ACK.
+    3. Poll GMU RSC `0x23501` (reg offset `0x0f404`) until `0` (power-up complete).
+    4. GMU RSC write `0x23b07` = `0` (clear trigger).
+    5. GMU write `0x1f840` (reg offset `0x00100`) = `1` (enable GMU power domain).
+  - Verifies Adreno 640 Chip ID `0x06040001` read from `0x02C00000`.
+  - Defines `class SweetAccelerator : public IOService` matching `gpu` nub under `/arm-io` and publishes:
+    - `IOGPUDevice = true`, `IOGPUFamily = "Apple"`, `MetalPluginName = "AGXMetal"`, `IOGPUNumCommandQueues = 4`, `IOGPUMaxSurfaces = 64`, `IOGPUGlobalSharedStorageSize = 256MB`, `IOGPUFeatureFlags = 0x1f`, `IOGPUPerformanceLevel = 3`.
+  - Implements `class SweetAcceleratorUserClient : public IOUserClient` servicing context creation, device registration, and command queue submission for `backboardd` / `CA::Render::Server`.
+  - **Metal & Blur Activation:** CoreAnimation recognizes `IOGPUDevice` and unlocks `CA::Render::MetalContext` hardware rendering pipeline, enabling `CABackdropLayer` (Gaussian blur filters on Dock, Control Center, App Switcher, and Home Screen folders).
+- **Official iOS 16 Wallpaper & Stock App Icons Injection ([`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py)):**
+  - Added `springboard_assets(root)`:
+    - Automatically copies `DefaultIconState~iphone.plist` into `/private/var/mobile/Library/SpringBoard/IconState.plist` and `DesiredIconState.plist` (owned by `mobile:mobile`, `0600`).
+    - Injects all core stock Apple apps onto Home Screen and Dock: `MobilePhone.app`, `MobileSafari.app`, `MobileSMS.app`, `Music.app`, `Camera.app`, `MobileSlideShow.app` (Photos), `AppStore.app`, `Preferences.app`, `Maps.app`, `Weather.app`, `Notes.app`, `Reminders.app`, `Clock.app`, `Health.app`, `Passbook.app`, etc.
+    - Sets `SBShowNonDefaultSystemApps = True` and `SBShowInternalApps = True` in `com.apple.springboard.plist`.
+    - Generates official iOS 16 wallpaper thumbnails (`HomeBackgroundThumbnail.jpg`, `LockBackgroundThumbnail.jpg`) and binary `cpbitmap` images (`HomeBackground.cpbitmap`, `LockBackground.cpbitmap`, `OriginalHomeBackground.cpbitmap`, `OriginalLockBackground.cpbitmap`) with 24-byte trailer (`1080 x 2340`, BGRA).
+- **Device Tree (`tools/mkadt.py`):**
+  - Added `node('gpu', ...)` under `/arm-io` with `compatible = "qcom,adreno-640\0qcom,adreno\0apple,ioaccelerator\0"` and `reg = <0x02c00000 0x40000 0x02c6a000 0x30000>`.
+  - Regenerated `shim/out/gm1901.adt` and `shim/out/gm1901-low.adt`.
+
+
 **🎉🎉🎉 HISTORIC BREAKTHROUGH: OFFICIAL iOS 16.6.1 GUI RUNNING ON ONEPLUS 7 (GM1901)!**
 - **Full Userland & GUI Verification (`uploaded_media_1793714389392.jpg`):**
   - **Device successfully booted directly into the iOS 16 Home Screen and Settings app!**

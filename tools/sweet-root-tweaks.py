@@ -149,6 +149,60 @@ def audio(root):
         print('StartRecorderServer off', os.path.relpath(conf, root))
 
 
+def springboard_assets(root):
+    sb_dir = os.path.join(root, 'private/var/mobile/Library/SpringBoard')
+    os.makedirs(sb_dir, exist_ok=True)
+    os.chown(sb_dir, MOBILE, MOBILE)
+    os.chmod(sb_dir, 0o755)
+
+    # 1. Icons layout: IconState.plist and DesiredIconState.plist
+    default_icon_plist = os.path.join(root, 'System/Library/CoreServices/SpringBoard.app/DefaultIconState~iphone.plist')
+    if not os.path.exists(default_icon_plist):
+        default_icon_plist = os.path.join(root, 'System/Library/CoreServices/SpringBoard.app/DefaultIconState.plist')
+
+    if os.path.exists(default_icon_plist):
+        icon_data = load(default_icon_plist)
+        for name in ('IconState.plist', 'DesiredIconState.plist'):
+            dst = os.path.join(sb_dir, name)
+            save(dst, icon_data, MOBILE, MOBILE, 0o600)
+            print('springboard icon state:', dst)
+
+    # 2. Official iOS 16 Wallpaper
+    wallpaper_src = '/private/tmp/ios16_wallpaper.jpg'
+    if os.path.exists(wallpaper_src):
+        try:
+            from PIL import Image
+            import struct
+            im = Image.open(wallpaper_src).convert('RGBA')
+            w, h = im.size
+
+            # Save thumbnails
+            for name in ('HomeBackgroundThumbnail.jpg', 'LockBackgroundThumbnail.jpg'):
+                dst = os.path.join(sb_dir, name)
+                shutil.copy2(wallpaper_src, dst)
+                os.chown(dst, MOBILE, MOBILE)
+                os.chmod(dst, 0o644)
+                print('wallpaper thumb:', dst)
+
+            # Generate cpbitmap with 24-byte trailer
+            r, g, b, a = im.split()
+            bgra = Image.merge('RGBA', (b, g, r, a))
+            raw = bgra.tobytes()
+            trailer = struct.pack('<6i', 1, w, h, 0, 0, 0)
+            cpbitmap_data = raw + trailer
+
+            for name in ('HomeBackground.cpbitmap', 'LockBackground.cpbitmap',
+                         'OriginalHomeBackground.cpbitmap', 'OriginalLockBackground.cpbitmap'):
+                dst = os.path.join(sb_dir, name)
+                with open(dst, 'wb') as f:
+                    f.write(cpbitmap_data)
+                os.chown(dst, MOBILE, MOBILE)
+                os.chmod(dst, 0o644)
+                print('wallpaper cpbitmap:', dst)
+        except Exception as e:
+            print('Warning: could not generate wallpaper cpbitmap:', e)
+
+
 def main():
     global BUILD, VERSION
     if len(sys.argv) != 2 or not os.path.isdir(os.path.join(sys.argv[1], 'System/Library/xpc')):
@@ -164,6 +218,7 @@ def main():
     containers(root)
     activation(root)
     audio(root)
+    springboard_assets(root)
     merge_pref(root, 'com.apple.migration', {
         'LastSystemVersion': BUILD,
         'DMUserDataDisposition': {'SyntheticDidUpgrade': False, 'buildVersion': BUILD}})
@@ -174,7 +229,9 @@ def main():
     merge_pref(root, 'com.apple.springboard', {
         'BKNoWatchdogs': True,
         'FBLaunchWatchdogExceptions': {'com.apple.purplebuddy': 100.0},
-        'MCForceShowCloudConfigurationUI': False})
+        'MCForceShowCloudConfigurationUI': False,
+        'SBShowNonDefaultSystemApps': True,
+        'SBShowInternalApps': True})
     merge_pref(root, 'com.apple.purplebuddy', {
         'SetupDone': True, 'SetupFinishedAllSteps': True, 'SetupVersion': 11,
         'daemonizeNeedsToRun': False})
