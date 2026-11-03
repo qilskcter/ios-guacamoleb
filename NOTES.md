@@ -1,8 +1,22 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## Active handoff update (2026-11-03)
+## Active handoff update (2026-11-04)
 
-**🎉🎉🎉 ADRENO 640 HARDWARE ACCELERATION DRIVER (0084) & OFFICIAL iOS 16 SPRINGBOARD SUITE:**
+**🎉🎉🎉 11 GB OFFICIAL iOS 16 ROOTFS FLASHED TO UFS & SYSTEM BOOTED ON ONEPLUS 7 (GM1901)!**
+- **Rootfs Flash Milestone (`fastboot flash userdata`):**
+  - Built official iOS 16 rootfs with [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py) incorporating:
+    - 143 stock Apple app icons in `/private/var/mobile/Library/SpringBoard/IconState.plist` and `DesiredIconState.plist`.
+    - `SBShowNonDefaultSystemApps = True` and `SBShowInternalApps = True` in `com.apple.springboard.plist`.
+    - Official iOS 16 binary `cpbitmap` wallpapers (`HomeBackground.cpbitmap`, `LockBackground.cpbitmap`, `OriginalHomeBackground.cpbitmap`, `OriginalLockBackground.cpbitmap` at `1080x2340`) and JPEG thumbnails.
+  - Successfully generated `/Users/nguyendinhkhanh/Downloads/ios-root-16g.simg` (11 GiB sparse image).
+  - Flashed cleanly across 15 sparse chunks to internal UFS `userdata` (`sda19`): Total flash time `418.55s`, status `OKAY`.
+- **System Boot Execution:**
+  - Fresh bootloader session established after fastboot restart.
+  - Booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`26 MiB`, 60 FPS presentation, hardware keys, touch, zero heap contention):
+    - `Sending 'boot.img' (26308 KB) OKAY [0.621s]`
+    - `Booting OKAY [0.081s]`
+    - Total time: `0.714s`.
+  - OnePlus 7 is currently booting directly into iOS 16 with the full suite of stock applications and official wallpapers.
 - **Adreno 640 Hardware Acceleration Driver ([`xnu/patches/0084-sweet-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-sweet-adreno-gpu.patch)):**
   - Reverse-engineered GMU and GPU RSC sequences from OnePlus 7 OxygenOS 10 kernel (`Image_reloc.bin`) via MCP REA and Capstone (`a6xx_rpmh_power_on_gpu` at `0xffffff80088c5cd8` and `gmu_reg_write` at `0xffffff8008877730`).
   - GMU base `0x02C6A000` (192 KB) and GPU base `0x02C00000` (256 KB) mapped via `ml_io_map`.
