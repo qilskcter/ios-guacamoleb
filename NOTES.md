@@ -2,17 +2,22 @@
 
 ## Active handoff update (2026-11-03)
 
-**🎉🎉🎉 HISTORIC BREAKTHROUGH: OFFICIAL iOS 16 GRAPHICAL USER INTERFACE (GUI) LIVE ON ONEPLUS 7 (GM1901)!**
-- **iOS 16 GUI Presentation Confirmed (2026-11-03 20:56 local):**
-  - Following the zero-filled HFS+ root filesystem flash (`ios-root-16g.simg` with `CHUNK_TYPE_FILL`) and boot of `shim/out/shim-boot-0082.img`, the expanding boot progress bar completed cleanly.
-  - **`ProgressUI` successfully dismissed and transitioned into the official iOS 16 graphical user interface (Setup / SpringBoard home screen) on the OnePlus 7 AMOLED display!**
-  - All 6 core device subsystems functioning in concert:
-    1. Qualcomm Snapdragon 855 (SM8150) 8-core Kryo 485 SMP CPUs online (`cpus=8`).
-    2. AMOLED native display via `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`).
-    3. Internal UFS DMA storage on `userdata` (`sda19`, 16 GiB HFS+ rootfs).
-    4. Hardware keys via PM8150 SPMI (`SWEET KEYS`).
-    5. Synaptics S3706 multi-touch controller via bit-bang GPIO 55/56 I2C (`SWEET TOUCH`).
-    6. Full iOS 16 userland execution (`launchd`, `backboardd`, `SpringBoard`).
+**🎉🎉🎉 HISTORIC BREAKTHROUGH: OFFICIAL iOS 16.6.1 GUI RUNNING ON ONEPLUS 7 (GM1901)!**
+- **Full Userland & GUI Verification (`uploaded_media_1793714389392.jpg`):**
+  - **Device successfully booted directly into the iOS 16 Home Screen and Settings app!**
+  - Verified live on GM1901 AMOLED screen in `Settings > General > About`:
+    - **Name:** iPhone
+    - **iOS Version:** 16.6.1 (Build 20G81)
+    - **Model Name:** iPhone X
+    - **Capacity:** 17 GB (matches 16 GiB internal UFS `userdata` partition)
+    - **Available:** 4.58 GB
+    - Battery indicator rendering live in the status bar (green charging icon).
+  - **Hardware Inputs Confirmed Functional:**
+    - SPMI hardware keys (Power, Vol Up, Vol Down) responsive and functional.
+    - Touchscreen (Synaptics S3706 via GPIO 55/56 I2C) fully functional, allowing navigation between Home Screen and Settings.
+  - **Current System Status & Known Next Steps:**
+    - **Display & Rendering:** Running cleanly via software rendering on `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`). Qualcomm Adreno 640 GPU hardware acceleration is currently inactive (unaccelerated framebuffer, expected for early bring-up).
+    - **Storage:** 16 GiB HFS+ root on internal UFS `userdata` (`sda19`) running cleanly read-write.
 - **Zero-Filled Clean Rootfs Flashed & Boot Triggered (2026-11-03 20:35 - 20:56 local):**
   - Flashed `ios-root-16g.simg` built with `CHUNK_TYPE_FILL` (15/15 chunks, 11,074 MiB, total time 417.957s, OKAY). All zero blocks zero-filled onto internal UFS `userdata` partition.
   - Successfully booted `fastboot boot shim/out/shim-boot-0082.img` in RAM (`Sending OKAY [0.616s]`, `Booting OKAY [0.081s]`).
