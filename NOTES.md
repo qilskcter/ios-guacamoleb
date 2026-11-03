@@ -43,11 +43,10 @@
     3. `com.apple.DataMigration.plist`, `ByHost`, and activation data ark pre-seeding are maintained with matching build `20G81` (16.6.1).
   - Pushed in commit [`860bc06`](https://github.com/qilskcter/ios-sweet/commit/860bc06).
   - Device currently in recovery with ADB active (`85d68e24 recovery`).
-- **Next concrete action:**
-  - Run `sudo ./tools/build_ios_root.sh` to produce the finalized `ios-root-16g.simg`.
-  - Reboot to fastboot: `adb reboot bootloader`.
-  - Flash to userdata: `fastboot flash -S 512M userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg`.
-  - Boot into GUI: `fastboot boot shim/out/shim-boot-0082.img`.
+- **Finalized Rootfs Flashed & Booted (2026-11-03 19:49 local):**
+  - Flashed finalized `ios-root-16g.simg` (with in-place patched `launchd.plist`, matching `20G81` migration markers, and clean dyld cache links) to `userdata` (`sda19`): all 23 chunks written successfully (`Total time: 391.794s`).
+  - Booted `shim/out/shim-boot-0082.img` with `sweetfb_noconsole=1 sweetfb_hz=30` (`Sending OKAY [0.620s]`, `Booting OKAY [0.081s]`).
+  - Awaiting live presentation from GM1901 screen.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
