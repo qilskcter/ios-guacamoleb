@@ -2,7 +2,23 @@
 
 ## Active handoff update (2026-11-04)
 
-**🎉🎉🎉 2.84 GHz BOOSTED KERNEL & FRESH 11 GB ROOTFS BOOTED ON ONEPLUS 7 (GM1901)!**
+**🛌🛌🛌 SESSION HANDOFF: FASTBOOT BOOT HELPER READY & KNOWN OBSERVATIONS:**
+- **Current Device State:**
+  - OnePlus 7 (`GM1901` / `guacamoleb`, Qualcomm Snapdragon 855 / SM8150, 8 GB RAM / 256 GB UFS).
+  - Internal UFS `userdata` (`sda19`) holds full 11 GiB iOS 16 rootfs.
+- **User Observations Recorded (2026-11-04 02:40):**
+  - Device booted into iOS 16 via [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img).
+  - *Observation 1 (Wallpaper & Icons):* Neither the iOS 16 wallpaper nor the full set of app icons appeared on the Home Screen in this boot.
+  - *Observation 2 (Rendering / Swipe):* Swiping remained noticeably non-smooth / laggy; the early `loader.c` register write to OSM (`0x18323000`, `0x18325800`, `0x18327800`) did not tangibly boost the UI compositing performance.
+- **Next Concrete Actions for Subsequent Session:**
+  1. *Wallpaper / PosterBoard Investigation:* In iOS 16, wallpapers are decoupled from legacy `HomeBackground.cpbitmap` into `PosterBoard.app` / `PosterBoardServices` with dynamic descriptors under `/private/var/mobile/Library/PosterBoard/`. Needs inspection of how PosterBoard initializes default posters or how SpringBoard falls back to wallpaper collections in `/Library/Wallpaper/Collections/`.
+  2. *Application Icons Registration:* SpringBoard populates icons strictly from LaunchServices SQLite / csstore database. In `data_ark.plist`, `-DataMigrationCompleted = True` skips `uicache` / `lsd` initial registration. Need to inspect `/private/var/db/lsd` or run a proper first-boot daemon trigger so LaunchServices parses `/Applications`.
+  3. *Performance & GPU / CPU Frequency Scaling:*
+     - The OSM/EPSS clock registers in Snapdragon 855 require clock domain enable votes (`qcom,cpucc` CBCR and APCS branch enable votes at `0x00100000` / `0x52014`) before frequency switching registers (`0x320`) take effect. Implement an in-kernel driver (`SweetCPUFreq.cpp`) mapped via `ml_io_map` in `SweetPlatformExpert` with proper clock voting.
+     - Alternatively, utilize Snapdragon 855 DPU (Display Processing Unit at `0x0ae00000`) hardware overlay pipes / blitter to achieve zero-CPU hardware presentation.
+- **One-Click Boot Command:**
+  - Fastboot boot script created: [`tools/boot_ios.sh`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/boot_ios.sh).
+  - Fastboot command: `fastboot boot shim/out/shim-boot-0083.img`.
 - **Rootfs Flash Milestone (`fastboot flash userdata`):**
   - Re-generated `/Users/nguyendinhkhanh/Downloads/ios-root-16g.simg` (11 GiB sparse image) via `build_ios_root.sh` at 02:13 incorporating:
     - Pre-generated official iOS 16 `1080x2340` BGRA `.cpbitmap` wallpapers and JPEG thumbnails from `assets/springboard/`.
