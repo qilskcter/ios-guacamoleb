@@ -33,12 +33,17 @@ BUILD, VERSION = '20H392', '16.7.16'
 MOBILE = 501
 
 
+PLATFORM_UUID = 'A9683613-3704-53F2-95D0-98A8FB574E78'
+ACTIVATION_CONTAINER_UUID = 'D90C94C4-F94E-4FCF-8A28-A93BE3846D8E'
+
+
 def load(path):
     with open(path, 'rb') as f:
         return plistlib.load(f)
 
 
 def save(path, data, uid, gid, mode, fmt=plistlib.FMT_BINARY):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'wb') as f:
         plistlib.dump(data, f, fmt=fmt)
     os.chown(path, uid, gid)
@@ -52,6 +57,18 @@ def merge_pref(root, name, values):
     data.update(values)
     save(path, data, MOBILE, MOBILE, 0o600)
     print('pref', name, sorted(values))
+
+
+def byhost_pref(root, name, values):
+    """Write ByHost preference plists for both upper and lower case platform UUID."""
+    byhost_dir = os.path.join(root, 'private/var/mobile/Library/Preferences/ByHost')
+    os.makedirs(byhost_dir, exist_ok=True)
+    os.chown(byhost_dir, MOBILE, MOBILE)
+    os.chmod(byhost_dir, 0o755)
+    for uuid_str in (PLATFORM_UUID, PLATFORM_UUID.lower()):
+        p = os.path.join(byhost_dir, f'{name}.{uuid_str}.plist')
+        save(p, values, MOBILE, MOBILE, 0o600)
+        print('byhost pref', os.path.basename(p))
 
 
 def launchd(root):
@@ -93,8 +110,18 @@ def find_container(root, kind, identifier):
 def activation(root):
     c = find_container(root, 'Data/System', 'com.apple.mobileactivationd')
     if c is None:
-        print('warning: no mobileactivationd system container in the image; skipped data ark')
-        return
+        c = os.path.join(root, 'private/var/containers/Data/System', ACTIVATION_CONTAINER_UUID)
+        os.makedirs(c, exist_ok=True)
+        os.chown(c, 0, 0)
+        os.chmod(c, 0o755)
+        meta_file = os.path.join(c, '.com.apple.mobile_container_manager.metadata.plist')
+        save(meta_file, {
+            'MCMMetadataIdentifier': 'com.apple.mobileactivationd',
+            'MCMMetadataContainerClass': 13,
+            'MCMMetadataSchemaVersion': 1,
+        }, 0, 0, 0o644)
+        print('created mobileactivationd container', c)
+
     d = os.path.join(c, 'Library/internal')
     os.makedirs(d, exist_ok=True)
     os.chown(d, MOBILE, MOBILE)
@@ -133,6 +160,10 @@ def main():
     merge_pref(root, 'com.apple.migration', {
         'LastSystemVersion': BUILD,
         'DMUserDataDisposition': {'SyntheticDidUpgrade': False, 'buildVersion': BUILD}})
+    merge_pref(root, 'com.apple.DataMigration', {
+        'LastSystemVersion': BUILD})
+    byhost_pref(root, 'com.apple.migration', {
+        'LastSystemVersion': BUILD})
     merge_pref(root, 'com.apple.springboard', {
         'BKNoWatchdogs': True,
         'FBLaunchWatchdogExceptions': {'com.apple.purplebuddy': 100.0},
