@@ -23,8 +23,8 @@
      "   {"
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
-+++ b/iokit/Kernel/arm/SweetAdreno.h
-@@ -0,0 +1,52 @@
++++ b/iokit/Kernel/arm/SweetAdreno.cpp
+@@ -0,0 +1,219 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
@@ -33,70 +33,19 @@
 + * Unlocks hardware-accelerated composition and CABackdropLayer (Gaussian Blur)
 + * across SpringBoard, Dock, Control Center, and App Switcher.
 + */
-+#ifndef _SWEET_ADRENO_H
-+#define _SWEET_ADRENO_H
-+
 +#include <pexpert/arm64/board_config.h>
 +
 +#if defined(SWEET)
 +#include <IOKit/IOService.h>
 +#include <IOKit/IOUserClient.h>
++#include <IOKit/IOKitKeys.h>
 +#include <IOKit/IOLib.h>
 +#include <IOKit/IOLocks.h>
 +#include <IOKit/system.h>
-+#include <mach/mach_types.h>
-+
-+class SweetAccelerator : public IOService {
-+	OSDeclareDefaultStructors(SweetAccelerator);
-+
-+public:
-+	volatile uint32_t *fGpuBase;
-+	volatile uint32_t *fGmuBase;
-+	uint32_t           fChipId;
-+	IOLock            *fLock;
-+
-+	virtual bool init(OSDictionary *dictionary = NULL) APPLE_KEXT_OVERRIDE;
-+	virtual void free() APPLE_KEXT_OVERRIDE;
-+	virtual bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
-+	virtual void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
-+
-+	bool powerOnGPU();
-+	uint32_t readChipID();
-+};
-+
-+class SweetAcceleratorUserClient : public IOUserClient {
-+	OSDeclareDefaultStructors(SweetAcceleratorUserClient);
-+
-+private:
-+	SweetAccelerator *fDriver;
-+	task_t            fTask;
-+
-+public:
-+	virtual bool initWithTask(task_t owningTask, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
-+	virtual bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
-+	virtual IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
-+	virtual IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-+	    IOExternalMethodDispatch *dispatch = NULL, OSObject *target = NULL,
-+	    void *reference = NULL) APPLE_KEXT_OVERRIDE;
-+};
-+
-+#endif /* SWEET */
-+#endif /* _SWEET_ADRENO_H */
---- /dev/null
-+++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,217 @@
-+/*
-+ * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
-+ *
-+ * Reverse-engineered from OxygenOS 10 kernel (SM8150 kgsl/a6xx driver) using MCP REA.
-+ */
-+#include "SweetAdreno.h"
-+
-+#if defined(SWEET)
-+#include <IOKit/IOKitKeys.h>
-+#include <sys/proc.h>
 +#include <pexpert/pexpert.h>
++#include <mach/mach_types.h>
 +#include <machine/machine_routines.h>
++#include <sys/proc.h>
 +
 +#define ADRENO_GPU_BASE_PHYS   0x02C00000ULL
 +#define ADRENO_GPU_SIZE        0x40000ULL
@@ -113,8 +62,25 @@
 +
 +#define CHIP_ID_ADRENO_640     0x06040001U
 +
++class SweetAccelerator : public IOService {
++	OSDeclareDefaultStructors(SweetAccelerator);
++
++public:
++	volatile uint32_t *fGpuBase;
++	volatile uint32_t *fGmuBase;
++	uint32_t           fChipId;
++	IOLock            *fLock;
++
++	bool init(OSDictionary *dictionary = NULL) APPLE_KEXT_OVERRIDE;
++	void free() APPLE_KEXT_OVERRIDE;
++	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++	void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
++
++	bool powerOnGPU();
++	uint32_t readChipID();
++};
++
 +OSDefineMetaClassAndStructors(SweetAccelerator, IOService);
-+OSDefineMetaClassAndStructors(SweetAcceleratorUserClient, IOUserClient);
 +
 +bool
 +SweetAccelerator::init(OSDictionary *dictionary)
@@ -238,6 +204,23 @@
 +{
 +	IOService::stop(provider);
 +}
++
++class SweetAcceleratorUserClient : public IOUserClient {
++	OSDeclareDefaultStructors(SweetAcceleratorUserClient);
++
++public:
++	SweetAccelerator *fDriver;
++	task_t            fTask;
++
++	bool initWithTask(task_t owningTask, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
++	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++	IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
++	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
++	    IOExternalMethodDispatch *dispatch, OSObject *target,
++	    void *reference) APPLE_KEXT_OVERRIDE;
++};
++
++OSDefineMetaClassAndStructors(SweetAcceleratorUserClient, IOUserClient);
 +
 +bool
 +SweetAcceleratorUserClient::initWithTask(task_t owningTask, void *securityID, UInt32 type)
