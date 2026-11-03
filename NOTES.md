@@ -26,6 +26,11 @@
 - **Device Tree (`tools/mkadt.py`):**
   - Added `node('gpu', ...)` under `/arm-io` with `compatible = "qcom,adreno-640\0qcom,adreno\0apple,ioaccelerator\0"` and `reg = <0x02c00000 0x40000 0x02c6a000 0x30000>`.
   - Regenerated `shim/out/gm1901.adt` and `shim/out/gm1901-low.adt`.
+- **CI Build & Packaging Status:**
+  - GitHub Actions CI run `41684720212` succeeded in `7m02s` with zero errors.
+  - Downloaded kernel to [`xnu/out-0084/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0084/kernel.development.sweet) (`16 MiB`).
+  - Packaged [`shim/out/shim-boot-0084.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0084.img) (`26 MiB`) with complete standard boot arguments (`serial=3 debug=0xc cpus=8 keepsyms=1 sweetfb_noconsole=1 sweetfb_hz=60 sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`).
+  - Ready to boot via `fastboot boot shim/out/shim-boot-0084.img`.
 
 
 **🎉🎉🎉 HISTORIC BREAKTHROUGH: OFFICIAL iOS 16.6.1 GUI RUNNING ON ONEPLUS 7 (GM1901)!**
