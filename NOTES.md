@@ -28,11 +28,17 @@
       2. Wrote `/var/mobile/Library/Preferences/ByHost/com.apple.migration.<UUID>.plist` for both upper and lowercase platform UUID `A9683613-3704-53F2-95D0-98A8FB574E78`.
       3. Created and pre-seeded `mobileactivationd` system container `D90C94C4-F94E-4FCF-8A28-A93BE3846D8E` with `data_ark.plist` (`-ActivationState: Activated`).
     - Added [`tools/build_ios_root.sh`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/build_ios_root.sh) (commit `b835e9c`) to automate building the patched 16 GiB HFS+ image, converting to Android sparse image (`.simg`), and cleaning up intermediate files.
-- **Rebuilt Clean Rootfs Flashed & Booted (2026-11-03 18:01 local):**
-  - Rebuilt `ios-root-16g.simg` after cleanly unmounting all DMG volumes, ensuring 100% root ownership and unquarantined dyld cache.
-  - Flashed `ios-root-16g.simg` to `userdata` (23 chunks, 391.5s, OKAY).
-  - Booted `shim/out/shim-boot-0082.img` with `sweetfb_noconsole=1 sweetfb_hz=30` (`Sending OKAY [0.628s]`, `Booting OKAY [0.080s]`).
-  - Observing iOS 16 userland / SpringBoard presentation on GM1901 screen.
+- **Root-Cause Analysis & Fix for Early Userland SIGSEGV (`uploaded_media_1793703769686.jpg`):**
+  - **Symptom:** Right after mapping `dyld_shared_cache_arm64.42.dyldlinkedit`, `/sbin/launchd` exited with `exit reason namespace 2 subcode 0xb` (SIGSEGV) before reaching `launchd op 4`.
+  - **Root Cause 1 (`hdiutil` ownership):** macOS `hdiutil attach` defaults to `-owners off` (`noowners`), stripping Apple root/system UIDs and GIDs during the `rsync` copy into the target HFS+ image. Fixed by passing `-owners on` to `hdiutil attach` in [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py).
+  - **Root Cause 2 (`launchd.plist` serialization):** Python's `plistlib.dump` de-duplicated over 33,000 objects in `launchd.plist`, corrupting binary structures parsed by early `launchd` under `launchd_unsecure_cache=1`. Fixed by using macOS native `plutil -convert binary1` in [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py).
+  - **Root Cause 3 (Build mismatch):** `sweet-root-tweaks.py` had hardcoded `BUILD = '20H392'` (16.7.16) instead of `20G81` (16.6.1 from the extracted IPSW). Added dynamic build detection from `SystemVersion.plist` so `datamigrator` immediately recognizes the system version as matching and skips all migration work.
+  - Changes committed and pushed in commit [`1cdba1c`](https://github.com/qilskcter/ios-sweet/commit/1cdba1c).
+  - Device `85d68e24` confirmed in fastboot mode (`fastboot devices -> 85d68e24 fastboot`).
+- **Next concrete action:**
+  - Build the corrected image: `sudo ./tools/build_ios_root.sh`
+  - Flash to userdata: `fastboot flash -S 512M userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg`
+  - Boot into SpringBoard: `fastboot boot shim/out/shim-boot-0082.img`
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
