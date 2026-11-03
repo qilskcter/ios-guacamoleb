@@ -73,13 +73,19 @@ def byhost_pref(root, name, values):
 
 def launchd(root):
     path = os.path.join(root, 'System/Library/xpc/launchd.plist')
-    with open(path, 'rb') as f:
-        data = f.read()
-    count = data.count(b'_PanicOnCrash')
-    new_data = data.replace(b'_PanicOnCrash', b'_PanicOnCrasX')
-    with open(path, 'wb') as f:
-        f.write(new_data)
-    print(f'launchd.plist: in-place patched {count} _PanicOnCrash -> _PanicOnCrasX (exact size {len(new_data)} B preserved)')
+    st = os.stat(path)
+    plist = load(path)
+    jobs = plist['LaunchDaemons']
+    renamed = 0
+    for job in jobs.values():
+        if '_PanicOnCrash' in job:
+            job['_PanicOnCrasX'] = job.pop('_PanicOnCrash')
+            renamed += 1
+    removed = [k for k, j in jobs.items() if j.get('Label') == 'com.apple.CommCenter']
+    for k in removed:
+        del jobs[k]
+    save(path, plist, st.st_uid, st.st_gid, st.st_mode & 0o7777)
+    print(f'launchd.plist: {renamed} _PanicOnCrash renamed, {len(removed)} CommCenter jobs removed')
 
 
 def containers(root):

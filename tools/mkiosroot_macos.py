@@ -214,10 +214,14 @@ def main():
         tweaks_script = os.path.join(os.path.dirname(__file__), 'sweet-root-tweaks.py')
         run_cmd(['python3', tweaks_script, target_mount], capture=False)
 
+        print("[*] Flushing filesystem buffers to disk...")
+        run_cmd(['sync'], capture=False)
+
         print("[+] Root creation and tweaks completed successfully!")
 
     finally:
-        # Unmount target
+        # Sync and unmount target
+        run_cmd(['sync'], capture=False)
         if target_mount and os.path.ismount(target_mount):
             print(f"[*] Unmounting {target_mount}...")
             subprocess.run(['umount', target_mount], check=False)

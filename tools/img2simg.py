@@ -42,7 +42,7 @@ def convert(in_path, out_path, blk_sz=4096):
                 is_zero = (blk == zero_block)
 
                 if is_zero:
-                    if curr_type == CHUNK_TYPE_DONT_CARE:
+                    if curr_type == CHUNK_TYPE_FILL:
                         curr_count += 1
                         if curr_count == 65535:
                             chunks.append((curr_type, curr_count, None))
@@ -50,7 +50,7 @@ def convert(in_path, out_path, blk_sz=4096):
                     else:
                         if curr_count > 0:
                             chunks.append((curr_type, curr_count, bytes(curr_data)))
-                        curr_type = CHUNK_TYPE_DONT_CARE
+                        curr_type = CHUNK_TYPE_FILL
                         curr_count = 1
                         curr_data = bytearray()
                 else:
@@ -87,7 +87,7 @@ def convert(in_path, out_path, blk_sz=4096):
         out.write(hdr)
 
         raw_blocks = 0
-        dont_care_blocks = 0
+        fill_blocks = 0
 
         for c_type, c_blocks, c_data in chunks:
             if c_type == CHUNK_TYPE_RAW:
@@ -95,12 +95,13 @@ def convert(in_path, out_path, blk_sz=4096):
                 total_sz = 12 + c_blocks * blk_sz
                 out.write(struct.pack('<HHII', CHUNK_TYPE_RAW, 0, c_blocks, total_sz))
                 out.write(c_data)
-            elif c_type == CHUNK_TYPE_DONT_CARE:
-                dont_care_blocks += c_blocks
-                out.write(struct.pack('<HHII', CHUNK_TYPE_DONT_CARE, 0, c_blocks, 12))
+            elif c_type == CHUNK_TYPE_FILL:
+                fill_blocks += c_blocks
+                out.write(struct.pack('<HHII', CHUNK_TYPE_FILL, 0, c_blocks, 16))
+                out.write(b'\x00\x00\x00\x00')
 
     out_size = os.path.getsize(out_path)
-    print(f"[+] Done! Sparse image: {out_size >> 20} MiB ({raw_blocks} raw blocks, {dont_care_blocks} zero blocks skipped)")
+    print(f"[+] Done! Sparse image: {out_size >> 20} MiB ({raw_blocks} raw blocks, {fill_blocks} zero blocks zeroed)")
 
 
 if __name__ == '__main__':

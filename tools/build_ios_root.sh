@@ -40,5 +40,5 @@ rm -f "$OUT_RAW"
 
 echo "=========================================================="
 echo "🎉 SUCCESS: Generated $OUT_SIMG"
-echo "Ready to flash via: fastboot flash -S 512M userdata $OUT_SIMG"
+echo "Ready to flash via: fastboot flash userdata $OUT_SIMG"
 echo "=========================================================="
