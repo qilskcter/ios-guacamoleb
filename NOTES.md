@@ -15,13 +15,23 @@
     `SWEET HID: touch 0 down at 271,1735` -> Synaptics S3706 bit-bang I2C driver on TLMM GPIO 55/56 successfully reads touch coordinates and dispatches directly to `backboardd` digitizer event stream!
   - **SpringBoard Running Live (`uploaded_media_1793644693181.jpg`):**
     `SMP SpringBoard[26] slide 0x19b78000 mh 0x102b7c000` -> SpringBoard PID 26 running with multiple active threads (`t0..t5`), `backboardd` threads (`t4..t13`), and system daemons spawning via `xpcproxy` (`bluetoothd`, `fairplayd.H2`).
-- **Status at end of 2026-11-03 (early morning):**
-  - **Live Input & Userland Fully Verified:** Power/Volume keys, Synaptics S3706 touch, Apple boot logo/progress bar, 8 Kryo 485 CPUs, internal UFS userdata rootfs (`iOSRoot`), `/sbin/launchd`, `backboardd`, and `SpringBoard` (PID 26) all verified running live on GM1901.
-  - **Clean GUI Boot (`shim/out/shim-boot-0082.img`):** Booted with `sweetfb_noconsole=1 sweetfb_hz=30`. The Apple boot logo/progress bar was rendered.
-  - **Session paused by user (safe disconnect):** Phone can be safely unplugged and powered off. Android OS in internal storage, OrangeFox recovery, partition backups in `backup/gm1901/`, and iOS rootfs on `userdata` (`sda19`) are completely preserved.
-- **Next concrete action for next session:**
-  - Connect device and boot `shim/out/shim-boot-0082.img` in fastboot.
-  - Investigate SpringBoard transition from boot progress screen to SpringBoard UI (or check if `sweetusb=2` live UDP logs reveal any lockdownd/purplebuddy wait state, e.g. waiting for activation or lock screen dismiss).
+- **Hardware Log Verification via EvolutionX Recovery (2026-11-03 17:05 local, `logs/live-gm1901.txt`):**
+  - Enabled ADB in EvolutionX recovery and pulled persistent kernel log from `userdata` (`/dev/block/sda19`, 469,668 bytes):
+  - **100% Confirmed Root Cause of 98-99% Progress Bar Stall:**
+    - `exec com.apple.datamigrator` and `exec com.apple.migrationpluginwrapper` ran continuously in the background.
+    - `backboardd` performed over **193,000 swaps** (~107 minutes of presentation) holding the ProgressUI progress bar at ~99%.
+    - `SpringBoard` main thread (`t0`) was held waiting in synchronous `-[BKSSystemShellService _checkIn]` until data migration completed.
+    - Live hardware button and touch events were fully captured throughout (`key 0x30`, `key 0xe9`, `key 0xea`, multi-touch with edge flags).
+  - **Fix Applied & Pushed:**
+    - Updated [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py) (commit `7b8e709`):
+      1. Wrote `/var/mobile/Library/Preferences/com.apple.DataMigration.plist` (`LastSystemVersion = 20H392`).
+      2. Wrote `/var/mobile/Library/Preferences/ByHost/com.apple.migration.<UUID>.plist` for both upper and lowercase platform UUID `A9683613-3704-53F2-95D0-98A8FB574E78`.
+      3. Created and pre-seeded `mobileactivationd` system container `D90C94C4-F94E-4FCF-8A28-A93BE3846D8E` with `data_ark.plist` (`-ActivationState: Activated`).
+    - Added [`tools/build_ios_root.sh`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/build_ios_root.sh) (commit `b835e9c`) to automate building the patched 16 GiB HFS+ image, converting to Android sparse image (`.simg`), and cleaning up intermediate files.
+- **Next concrete action:**
+  - Build updated `ios-root-16g.simg` using `sudo ./tools/build_ios_root.sh`.
+  - Reboot phone to fastboot (`adb reboot bootloader`) and flash `fastboot flash -S 512M userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg`.
+  - Boot `fastboot boot shim/out/shim-boot-0082.img` to see the instant dismissal of the progress bar directly into the iOS 16 user interface.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
