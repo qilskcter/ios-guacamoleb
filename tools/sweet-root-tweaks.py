@@ -27,9 +27,9 @@ screen (image versions v8-v14 in NOTES.md):
                   comes from its Hactivation branch, selected by the /chosen
                   security-status properties in tools/mkadt.py
 """
-import glob, os, plistlib, shutil, sys
+import glob, os, plistlib, shutil, subprocess, sys
 
-BUILD, VERSION = '20H392', '16.7.16'
+BUILD, VERSION = '20G81', '16.6.1'
 MOBILE = 501
 
 
@@ -84,8 +84,16 @@ def launchd(root):
     removed = [k for k, j in jobs.items() if j.get('Label') == 'com.apple.CommCenter']
     for k in removed:
         del jobs[k]
-    save(path, plist, st.st_uid, st.st_gid, st.st_mode & 0o7777)
-    print(f'launchd.plist: {renamed} _PanicOnCrash renamed, {len(removed)} CommCenter jobs removed')
+    # Use plutil to generate canonical Apple binary plist
+    xml_path = path + '.tmp.xml'
+    with open(xml_path, 'wb') as f:
+        plistlib.dump(plist, f, fmt=plistlib.FMT_XML)
+    subprocess.run(['plutil', '-convert', 'binary1', '-o', path, xml_path], check=True)
+    if os.path.exists(xml_path):
+        os.remove(xml_path)
+    os.chown(path, st.st_uid, st.st_gid)
+    os.chmod(path, st.st_mode & 0o7777)
+    print(f'launchd.plist: {renamed} _PanicOnCrash renamed, {len(removed)} CommCenter jobs removed (canonical binary1)')
 
 
 def containers(root):
@@ -150,9 +158,16 @@ def audio(root):
 
 
 def main():
+    global BUILD, VERSION
     if len(sys.argv) != 2 or not os.path.isdir(os.path.join(sys.argv[1], 'System/Library/xpc')):
         sys.exit(__doc__)
     root = sys.argv[1]
+    sys_ver_path = os.path.join(root, 'System/Library/CoreServices/SystemVersion.plist')
+    if os.path.exists(sys_ver_path):
+        ver_info = load(sys_ver_path)
+        BUILD = ver_info.get('ProductBuildVersion', BUILD)
+        VERSION = ver_info.get('ProductVersion', VERSION)
+        print(f'Detected OS target: iOS {VERSION} (Build {BUILD})')
     launchd(root)
     containers(root)
     activation(root)
