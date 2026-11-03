@@ -27,7 +27,9 @@
   - **CI Build & Packaging Status:**
     - GitHub Actions CI run `41658193412` succeeded in `8m29s` with zero errors.
     - Downloaded kernel to [`xnu/out-0083/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0083/kernel.development.sweet).
-    - Packaged [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`26 MiB`) ready for fastboot boot.
+    - Packaged [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`26 MiB`).
+    - Successfully booted on device (`85d68e24`) via `fastboot boot shim/out/shim-boot-0083.img` (`Sending OKAY [0.616s]`, `Booting OKAY [0.081s]`).
+    - Awaiting live verification of 60 FPS presentation fluidity and touch responsiveness on the iOS Home Screen.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
