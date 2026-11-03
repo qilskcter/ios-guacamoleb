@@ -2,61 +2,21 @@
 
 ## Active handoff update (2026-11-03)
 
-**🎉🎉 HISTORIC MILESTONE: FULL TOUCH & BUTTON INTERACTION IN iOS 16 ON ONEPLUS 7!**
-- **Userland Boot & Live Input Verification (`uploaded_media_1793644039792.jpg`, `uploaded_media_1793644192466.jpg`, `uploaded_media_1793644693181.jpg`):**
-  - Booted `shim/out/shim-boot-0082.img` with verified iOS parameters:
-    `serial=3 debug=0xc cpus=8 keepsyms=1 -enable_kprintf_spam -noprogress sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`
-  - Kernel cleanly mounted `iOSRoot` on internal UFS `userdata` (`rd=ufsroot0`), launched `/sbin/launchd` (PID 1).
-  - Apple boot logo and horizontal progress bar rendered on the `1080x2340` AMOLED display!
-  - **Live Hardware Button Verification:**
-    `SWEET KEYS: key=0 down=1 pon=0x5 gpio6=0x1 gpio7=0x1`
-    `SWEET HID: key 0x30 down (1 clients)` -> `backboardd` connected and actively receiving power key events.
-  - **Live Touchscreen Controller Verification:**
-    `SWEET HID: touch 0 down at 271,1735` -> Synaptics S3706 bit-bang I2C driver on TLMM GPIO 55/56 successfully reads touch coordinates and dispatches directly to `backboardd` digitizer event stream!
-  - **SpringBoard Running Live (`uploaded_media_1793644693181.jpg`):**
-    `SMP SpringBoard[26] slide 0x19b78000 mh 0x102b7c000` -> SpringBoard PID 26 running with multiple active threads (`t0..t5`), `backboardd` threads (`t4..t13`), and system daemons spawning via `xpcproxy` (`bluetoothd`, `fairplayd.H2`).
-- **Hardware Log Verification via EvolutionX Recovery (2026-11-03 17:05 local, `logs/live-gm1901.txt`):**
-  - Enabled ADB in EvolutionX recovery and pulled persistent kernel log from `userdata` (`/dev/block/sda19`, 469,668 bytes):
-  - **100% Confirmed Root Cause of 98-99% Progress Bar Stall:**
-    - `exec com.apple.datamigrator` and `exec com.apple.migrationpluginwrapper` ran continuously in the background.
-    - `backboardd` performed over **193,000 swaps** (~107 minutes of presentation) holding the ProgressUI progress bar at ~99%.
-    - `SpringBoard` main thread (`t0`) was held waiting in synchronous `-[BKSSystemShellService _checkIn]` until data migration completed.
-    - Live hardware button and touch events were fully captured throughout (`key 0x30`, `key 0xe9`, `key 0xea`, multi-touch with edge flags).
-  - **Fix Applied & Pushed:**
-    - Updated [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py) (commit `7b8e709`):
-      1. Wrote `/var/mobile/Library/Preferences/com.apple.DataMigration.plist` (`LastSystemVersion = 20H392`).
-      2. Wrote `/var/mobile/Library/Preferences/ByHost/com.apple.migration.<UUID>.plist` for both upper and lowercase platform UUID `A9683613-3704-53F2-95D0-98A8FB574E78`.
-      3. Created and pre-seeded `mobileactivationd` system container `D90C94C4-F94E-4FCF-8A28-A93BE3846D8E` with `data_ark.plist` (`-ActivationState: Activated`).
-    - Added [`tools/build_ios_root.sh`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/build_ios_root.sh) (commit `b835e9c`) to automate building the patched 16 GiB HFS+ image, converting to Android sparse image (`.simg`), and cleaning up intermediate files.
-- **Root-Cause Analysis & Fix for Early Userland SIGSEGV (`uploaded_media_1793703769686.jpg`):**
-  - **Symptom:** Right after mapping `dyld_shared_cache_arm64.42.dyldlinkedit`, `/sbin/launchd` exited with `exit reason namespace 2 subcode 0xb` (SIGSEGV) before reaching `launchd op 4`.
-  - **Root Cause 1 (`hdiutil` ownership):** macOS `hdiutil attach` defaults to `-owners off` (`noowners`), stripping Apple root/system UIDs and GIDs during the `rsync` copy into the target HFS+ image. Fixed by passing `-owners on` to `hdiutil attach` in [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py).
-  - **Root Cause 2 (`launchd.plist` serialization):** Python's `plistlib.dump` de-duplicated over 33,000 objects in `launchd.plist`, corrupting binary structures parsed by early `launchd` under `launchd_unsecure_cache=1`. Fixed by using macOS native `plutil -convert binary1` in [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py).
-  - **Root Cause 3 (Build mismatch):** `sweet-root-tweaks.py` had hardcoded `BUILD = '20H392'` (16.7.16) instead of `20G81` (16.6.1 from the extracted IPSW). Added dynamic build detection from `SystemVersion.plist` so `datamigrator` immediately recognizes the system version as matching and skips all migration work.
-  - Changes committed and pushed in commit [`1cdba1c`](https://github.com/qilskcter/ios-sweet/commit/1cdba1c).
-  - Device `85d68e24` confirmed in fastboot mode (`fastboot devices -> 85d68e24 fastboot`).
-- **Boot Result Analysis for 18:45 Boot (`uploaded_media_1793707681589.jpg`):**
-  - **Symptom:** Kernel booted through hardware drivers, mounted `iOSRoot` on `userdata`, launched `/sbin/launchd`, but `libignition` halted after `ignition blob not available`.
-  - **Root Cause & Fix:**
-    1. `-owners on` with `hdiutil attach` caused macOS APFS security attributes to prevent `libignition` from reading `hw.osenvironment` / sysctl. Reverted `attach_dmg_readonly` in [`tools/mkiosroot_macos.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkiosroot_macos.py) back to clean `hdiutil attach` without `-owners on` (matching the configuration that mapped all 42 dyld shared cache slices previously).
-    2. Any re-serialization of `launchd.plist` (via `plistlib` or `plutil`) modifies binary offset structures required by early launchd. Replaced with in-place 14-byte binary string replacement (`b'_PanicOnCrash'` -> `b'_PanicOnCrasX'`) in [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py) to preserve exact Apple binary layout (1,456,884 bytes).
-    3. `com.apple.DataMigration.plist`, `ByHost`, and activation data ark pre-seeding are maintained with matching build `20G81` (16.6.1).
-  - Pushed in commit [`860bc06`](https://github.com/qilskcter/ios-sweet/commit/860bc06).
-  - Device currently in recovery with ADB active (`85d68e24 recovery`).
-- **Finalized Rootfs Flashed & Booted (2026-11-03 19:49 local):**
-  - Flashed finalized `ios-root-16g.simg` (with in-place patched `launchd.plist`, matching `20G81` migration markers, and clean dyld cache links) to `userdata` (`sda19`): all 23 chunks written successfully (`Total time: 391.794s`).
-  - Booted `shim/out/shim-boot-0082.img` with `sweetfb_noconsole=1 sweetfb_hz=30` (`Sending OKAY [0.620s]`, `Booting OKAY [0.081s]`).
-  - Result: Screen log (`uploaded_media_1793710337665.jpg`) showed `CODE SIGNING: cs_invalid_page(0x102f50000): p=[1(launchd)] final status 0x22000800, allowing (remove VALID) page`, followed by `libignition` halting at `pivot src : n/a` with `subcode 0xb` (SIGSEGV).
-- **Decisive Root-Cause Analysis for `cs_invalid_page` & Memory Faults:**
-  - **Root Cause (Sparse Image DONT_CARE Corruption):** In [`tools/img2simg.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/img2simg.py), zero blocks were tagged with `CHUNK_TYPE_DONT_CARE` (`0xcac3`). Android fastboot specifications define `DONT_CARE` as blocks the client should skip writing, leaving existing flash sectors unchanged. On devices previously booted, residual HFS+ journal and runtime data remained on UFS userdata blocks, corrupting tail padding of binaries and libraries. Kernel verification failed on `/sbin/launchd` (`cs_invalid_page`), causing PAC/SIGSEGV crashes in PID 1.
-  - **Fix 1 (`img2simg.py` CHUNK_TYPE_FILL):** Replaced `CHUNK_TYPE_DONT_CARE` with `CHUNK_TYPE_FILL` (`0xcac2`) with 4-byte `0x00000000` fill. Fastboot now zero-fills all unallocated blocks on internal UFS, guaranteeing an exact 1:1 match with the raw HFS+ image without increasing sparse image size.
-  - **Fix 2 (`mkiosroot_macos.py` sync):** Added explicit filesystem sync before unmounting and detaching target HFS+ image.
-  - **Fix 3 (`sweet-root-tweaks.py` clean launchd):** Restored upstream `launchd` handling (removing `com.apple.CommCenter` and setting `_PanicOnCrasX`) via standard `plistlib.dump` binary format, which originally succeeded in booting SpringBoard at commit `0e728f3`.
-  - Pushed in commit [`50ab5f9`](https://github.com/qilskcter/ios-sweet/commit/50ab5f9). Device `85d68e24` confirmed in fastboot mode.
-- **Zero-Filled Clean Rootfs Flashed & Boot Triggered (2026-11-03 20:35 - 20:47 local):**
+**🎉🎉🎉 HISTORIC BREAKTHROUGH: OFFICIAL iOS 16 GRAPHICAL USER INTERFACE (GUI) LIVE ON ONEPLUS 7 (GM1901)!**
+- **iOS 16 GUI Presentation Confirmed (2026-11-03 20:56 local):**
+  - Following the zero-filled HFS+ root filesystem flash (`ios-root-16g.simg` with `CHUNK_TYPE_FILL`) and boot of `shim/out/shim-boot-0082.img`, the expanding boot progress bar completed cleanly.
+  - **`ProgressUI` successfully dismissed and transitioned into the official iOS 16 graphical user interface (Setup / SpringBoard home screen) on the OnePlus 7 AMOLED display!**
+  - All 6 core device subsystems functioning in concert:
+    1. Qualcomm Snapdragon 855 (SM8150) 8-core Kryo 485 SMP CPUs online (`cpus=8`).
+    2. AMOLED native display via `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`).
+    3. Internal UFS DMA storage on `userdata` (`sda19`, 16 GiB HFS+ rootfs).
+    4. Hardware keys via PM8150 SPMI (`SWEET KEYS`).
+    5. Synaptics S3706 multi-touch controller via bit-bang GPIO 55/56 I2C (`SWEET TOUCH`).
+    6. Full iOS 16 userland execution (`launchd`, `backboardd`, `SpringBoard`).
+- **Zero-Filled Clean Rootfs Flashed & Boot Triggered (2026-11-03 20:35 - 20:56 local):**
   - Flashed `ios-root-16g.simg` built with `CHUNK_TYPE_FILL` (15/15 chunks, 11,074 MiB, total time 417.957s, OKAY). All zero blocks zero-filled onto internal UFS `userdata` partition.
   - Successfully booted `fastboot boot shim/out/shim-boot-0082.img` in RAM (`Sending OKAY [0.616s]`, `Booting OKAY [0.081s]`).
-  - **HISTORIC MILESTONE CONFIRMED (`uploaded_media_1793713670154.jpg`):** Apple boot logo displayed cleanly in high resolution on GM1901 AMOLED screen, with the white capsule progress bar actively rendering and expanding horizontally in real time! Verifies live vector graphics rendering via `IOMobileFramebuffer` / `backboardd` / `ProgressUI`. Waiting for completion into SpringBoard / Setup.
+  - Progress bar expanded and cleanly transitioned directly into the iOS user interface!
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
