@@ -18,13 +18,16 @@
   - **Current System Status & Known Next Steps:**
     - **Display & Rendering:** Running cleanly via software rendering on `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`).
     - **Storage:** 16 GiB HFS+ root on internal UFS `userdata` (`sda19`) running cleanly read-write.
-- **Display Pipeline Optimization & Zero-Overhead Present ([`xnu/patches/0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):**
+- **Display Pipeline Optimization & Zero-Overhead Present ([`xnu/patches/0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch), commit `e49c112`):**
   - Isolated the root cause of GUI lag and frame drops during software presentation:
     - `AppleCLCD::vsyncFired` was previously calling `IOMallocData` and `IOFreeData` on the heap 60 times a second for every single vsync swap record. Replaced with stack-allocated `uint8_t rec[SWEET_FB_SWAP_REC_SIZE]`, eliminating heap allocations and contention from timer interrupt context.
     - Default `sweetfb_hz` updated from 10 to 60.
     - In `AppleCLCD::present`: When presenting full-frame buffers (`sx == 0 && dx == 0 && rowBytesToCopy == fRowBytes && s->bytesPerRow == fRowBytes`), a single contiguous `bcopy` transfers the entire 10 MB frame in <0.5 ms, bypassing line loops completely.
     - Added unrolled 64-byte row copy `sweet_fast_copy_row` using 64-bit general purpose register pairs (`ldp`/`stp` equivalent) to eliminate 2,340 function calls per frame and maximize write-combining buffer fill rates on the Cortex-A76 core.
-  - Packaging and testing updated XNU kernel on GM1901 via `fastboot boot`.
+  - **CI Build & Packaging Status:**
+    - GitHub Actions CI run `41658193412` succeeded in `8m29s` with zero errors.
+    - Downloaded kernel to [`xnu/out-0083/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0083/kernel.development.sweet).
+    - Packaged [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`26 MiB`) ready for fastboot boot.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
