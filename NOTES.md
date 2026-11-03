@@ -18,10 +18,9 @@
   - **Current System Status & Known Next Steps:**
     - **Display & Rendering:** Running cleanly via software rendering on `AppleCLCD` / `IOMobileFramebuffer` (`1080x2340`). Qualcomm Adreno 640 GPU hardware acceleration is currently inactive (unaccelerated framebuffer, expected for early bring-up).
     - **Storage:** 16 GiB HFS+ root on internal UFS `userdata` (`sda19`) running cleanly read-write.
-- **Zero-Filled Clean Rootfs Flashed & Boot Triggered (2026-11-03 20:35 - 20:56 local):**
-  - Flashed `ios-root-16g.simg` built with `CHUNK_TYPE_FILL` (15/15 chunks, 11,074 MiB, total time 417.957s, OKAY). All zero blocks zero-filled onto internal UFS `userdata` partition.
-  - Successfully booted `fastboot boot shim/out/shim-boot-0082.img` in RAM (`Sending OKAY [0.616s]`, `Booting OKAY [0.081s]`).
-  - Progress bar expanded and cleanly transitioned directly into the iOS user interface!
+- **60 Hz Native Display & Pipeline Optimization (2026-11-03 21:16 local):**
+  - Repackaged [`shim/out/shim-boot-0082.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0082.img) with `sweetfb_hz=60` to unlock full 60 FPS refresh rate on OnePlus 7 Fluid AMOLED.
+  - Device currently running live in iOS 16.6.1 userland. Ready for user to enter Fastboot mode (Power + Vol Down) for instant 60 FPS live verification.
 
 **GM1901 (OnePlus 7, SM8150) firmware & driver reverse-engineering milestone (via DTB/DTBO unpacking + MCP REA):**
 - **Extracted local firmware artifacts (untracked in `research/gm1901/`, kept out of git):**
