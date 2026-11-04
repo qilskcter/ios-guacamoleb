@@ -27,13 +27,16 @@
       6. `kgsl-3d0`: `0x02c00000` (256 KiB).
     - Hardware Interlock Finding: Disassembly of `gmu_reg_write` (`0xffffff8008877730`) confirmed `tbz w9, #6` (`GMU_FLAG_CLKS_ON` = `0x40`). Any register read/write to `0x02c00000` or `0x02c6a000` while `cx_gdsc` and `gpu_cc_ahb_clk` are dormant causes an immediate Qualcomm Hardware NOC Bus Fault, resetting the PMIC into EDL (`QUSB_BULK`).
     - Metal Architecture Mismatch: Userland `AGXMetal.bundle` is hardcoded for Apple G10 GPU microcode (iPhone X A11). Adreno 640 uses Qualcomm A6xx ISA. Frame presentation is safely handled through `AppleCLCD` / `CA::Render::SoftwareContext`.
-- **Current Device State & Diagnostic Image:**
-  - Photo 2 confirmed `launchd` loaded all 42 shared cache fragments (`dyld_shared_cache_arm64.42.dyldlinkedit`).
-  - Screen went black due to `sweetfb_noconsole=1`.
-  - Prepared [`shim/out/shim-boot-0085-debug.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085-debug.img) with `sweetfb_noconsole=0` so console remains 100% visible throughout SpringBoard execution.
+- **Current Device State & Live Debug Boot Execution:**
+  - OnePlus 7 (`GM1901` / `guacamoleb`, Snapdragon 855, serial `85d68e24`).
+  - Fresh bootloader session established via restart bootloader.
+  - Successfully booted [`shim/out/shim-boot-0085-debug.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085-debug.img) at 17:01:04:
+    - `Sending 'boot.img' (26308 KB) OKAY [0.615s]`
+    - `Booting OKAY [0.081s]`
+    - Total time: `0.710s`.
+  - Kernel active with `sweetfb_noconsole=0`: text console remains continuously active without screen muting to display live daemon execution (`backboardd`, `SpringBoard`).
 - **Next Concrete Action:**
-  - User exits EDL to Fastboot (hold Power + Vol- 10-15s).
-  - Boot `shim/out/shim-boot-0085-debug.img` to view the continuous live console without screen blanking.
+  - User observes phone display over the next 15-30 seconds to see live daemon execution text on screen.
 - **Current Device State:**
   - Successfully booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`0.715s`, status `OKAY`).
   - Device is running iOS 16 with the updated rootfs flashed at 15:32 (PosterBoard `RunAtLoad = True`, `today: []` in `IconState.plist`).
