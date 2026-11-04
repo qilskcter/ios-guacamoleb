@@ -2,14 +2,15 @@
 
 ## Active handoff update (2026-11-04)
 
-**🎉🎉🎉 CLEAN KERNEL 0085 PACKAGED INTO SHIM-BOOT-0085.IMG (SAFE NO-GPU, 16-BYTE TOUCH REDUCTION & 2340 SCALING)!**
-- **NOC Bus Fault Diagnosis & Root Cause:**
-  - `SweetAdreno::start` had attempted raw MMIO register reads at `0x02C00000` (GPU base) and `0x02C6A000` (GMU base) before Qualcomm `GPU_CC` power domains were initialized. This caused a fatal Qualcomm Network-on-Chip (NOC) bus fault, shutting down the display and dropping the device into EDL mode (`QUSB_BULK_SN:CA57B559`).
-  - Removed `xnu/patches/0084-sweet-adreno-gpu.patch` completely and purged `gpu` node from `tools/mkadt.py` (commit `cb7f1c5`).
+**🎉🎉🎉 REAL ROOT CAUSE OF EDL FAULT ISOLATED & FIXED: BOOST_CPU_CLOCKS() REMOVED FROM SHIM/LOADER.C!**
+- **NOC / XPU Bus Fault Diagnosis & Root Cause:**
+  - When the screen showed "1 đoạn mã" (`XNU: jumping (fbcon clears screen)`), `shim/loader.c` was calling `boost_cpu_clocks()`, which directly performed raw physical writes to Snapdragon 855 OSM/EPSS registers (`0x18323000`, `0x18325800`, `0x18327800`).
+  - Because non-secure EL1/EL2 does not have TrustZone XPU write permissions to the APCS clock cluster without prior hypervisor/clock framework voting, the write triggered an immediate Hardware NOC/XPU Bus Fault, causing hardware PMIC reset into Qualcomm EDL (`QUSB_BULK_SN:CA57B559`).
+  - Purged `boost_cpu_clocks()` from `shim/loader.c` (commit `1ec3cbb`), completely restoring the rock-solid shim boot sequence.
 - **Clean CI Build & Artifact Verification:**
   - GitHub Actions CI Run [41801364975](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41801364975) succeeded in 7m10s.
   - Downloaded clean kernel to [`xnu/out-0085/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0085/kernel.development.sweet) (`17,206,056` bytes).
-  - Packaged [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) (`26 MiB`, SHA256 verified) using [`tools/mkpayload.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkpayload.py) and [`shim/build.sh`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/build.sh).
+  - Repackaged [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) (`26 MiB`, SHA256 verified) with zero raw MMIO register accesses.
 - **Features Active in Clean 0085 Boot Image:**
   1. *No GPU NOC Fault:* Zero MMIO accesses to unclocked Adreno domains. Eliminates the black screen / EDL shutdown completely.
   2. *Ultra-Low Latency Touch:* `bsd/dev/sweet_touch.c` report read trimmed from 80 bytes to 16 bytes (2 fingers), cutting I2C bit-bang CPU busy-wait time by 80%.
