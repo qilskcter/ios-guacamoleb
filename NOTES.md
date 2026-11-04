@@ -18,15 +18,16 @@
   4. *SpringBoard & PosterBoard Integration:* Rootfs contains official iOS 16 wallpapers and clean 2-page app layout with `RunAtLoad = True` on PosterBoard.
 - **Current Device State & Live Boot Execution:**
   - OnePlus 7 (`GM1901` / `guacamoleb`, Snapdragon 855, serial `85d68e24`).
-  - Successfully booted clean [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) at 16:03:57:
-    - `Sending 'boot.img' (26308 KB) OKAY [0.616s]`
+  - Successfully booted clean [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) at 16:10:00:
+    - `Sending 'boot.img' (26308 KB) OKAY [0.619s]`
     - `Booting OKAY [0.081s]`
     - Total time: `0.712s`.
-  - Phone is currently booting into iOS 16 with the clean 0085 kernel (16-byte I2C touch reduction, 2340 digitizer scaling, zero GPU MMIO faults).
+  - Device USB bus verified: NO EDL fallback (`QUSB_BULK` absent); XNU running smoothly with 16-byte touch reduction and 2340 digitizer scaling.
 - **Next Concrete Action:**
   - Observe phone display and report status of:
-    1. Swiping and touch responsiveness (evaluating 16-byte latency fix).
-    2. Home Screen wallpapers and application icons.
+    1. Lock Screen / Home Screen rendering.
+    2. Swiping fluidity and touch responsiveness.
+    3. Wallpapers and stock app icons.
 - **Current Device State:**
   - Successfully booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`0.715s`, status `OKAY`).
   - Device is running iOS 16 with the updated rootfs flashed at 15:32 (PosterBoard `RunAtLoad = True`, `today: []` in `IconState.plist`).
