@@ -16,19 +16,14 @@
   2. *Ultra-Low Latency Touch:* `bsd/dev/sweet_touch.c` report read trimmed from 80 bytes to 16 bytes (2 fingers), cutting I2C bit-bang CPU busy-wait time by 80%.
   3. *Precise Digitizer Calibration:* Y-axis coordinate scaling corrected from `/ 2400` down to `/ 2340` (OnePlus 7 AMOLED height) for fluid 1:1 finger tracking.
   4. *SpringBoard & PosterBoard Integration:* Rootfs contains official iOS 16 wallpapers and clean 2-page app layout with `RunAtLoad = True` on PosterBoard.
-- **Current Device State & Live Boot Execution:**
+- **Current Device State & Live Rootfs Flashing:**
   - OnePlus 7 (`GM1901` / `guacamoleb`, Snapdragon 855, serial `85d68e24`).
-  - Successfully booted clean [`shim/out/shim-boot-0085-debug.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085-debug.img) at 16:17:16.
-  - Photo confirmed early boot reaches `*** DONE EARLYBOOT SETUP ***`.
-  - Root Cause of subsequent EDL reset isolated:
-    - In commit `05664f5`, `tools/sweet-root-tweaks.py` injected `RunAtLoad = True` into `/System/Library/LaunchAngels/com.apple.PosterBoard.plist`.
-    - `PosterBoard.app` is a SwiftUI/Metal application meant to be spawned strictly on-demand by SpringBoard via XPC, never as an unprivileged early boot daemon.
-    - When `launchd` spawns PosterBoard right after `*** DONE EARLYBOOT SETUP ***` without a running window server, PosterBoard crashes continuously in a tight respawn loop, causing CPU thrashing and triggering the PMIC watchdog hardware reset into EDL.
-  - Fixed in [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py) (commit `75460ef`): completely removed `posterboard` `RunAtLoad` injection.
+  - Clean iOS rootfs generated at 16:31: `/Users/nguyendinhkhanh/Downloads/ios-root-16g.simg` (11 GiB, 11,652,856,812 bytes) incorporating commit `75460ef` (PosterBoard `RunAtLoad = True` purged).
+  - Executing `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg` across 15 sparse chunks (task `task-5369`).
+  - Boot image ready: [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) (clean kernel 0085 with 16-byte I2C touch reduction and 2340 scaling).
 - **Next Concrete Action:**
-  - Exit EDL to Fastboot (hold Power + Vol+ + Vol- 10-15s, then Power + Vol-).
-  - Run `sudo ./tools/build_ios_root.sh` to produce a clean rootfs without the failing PosterBoard daemon.
-  - Flash rootfs and boot safely into SpringBoard.
+  - Wait for `fastboot flash userdata` completion (~4-5 mins).
+  - Restart bootloader / boot [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img).
 - **Current Device State:**
   - Successfully booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`0.715s`, status `OKAY`).
   - Device is running iOS 16 with the updated rootfs flashed at 15:32 (PosterBoard `RunAtLoad = True`, `today: []` in `IconState.plist`).
