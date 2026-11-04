@@ -3,14 +3,15 @@
 ## Active handoff update (2026-11-04)
 
 **🚀 SHIM-BOOT-0088: SPMI POWER KEYS & AUTOMATED SWIPE-UP UNLOCK TO SPRINGBOARD HOME SCREEN**
-- **Diagnosis of Live Lock Screen State (User Verification):**
-  1. *Clean GUI Verified:* Muting text console on first swap (`sweetfb_noconsole=1`) succeeded. AMOLED display renders the clean Lock Screen with battery and camera icons without any debug text over it.
-  2. *Power Key Unresponsive:*
-     - In `bsd/dev/sweet_keys.c`, `KEYS_OBS_PA` was previously mapped with only 64 KB (`0x10000`). On SM8150, the SPMI observer space is 1 MiB (`0x100000`).
-     - Furthermore, `sweet_keys_init()` had `count == 0 || count > 512`, which rejected SM8150's 1024 APIDs and immediately aborted initialization without spawning `keys_thread`.
-  3. *Touch / Swipe Inactivity:*
-     - The touch driver thread terminated early (`goto out; thread_terminate`) if initial clock/power votes failed.
-     - Bit-banging I2C delays were ~200 kHz, violating standard 100 kHz rise times on long panel traces.
+- **Diagnosis of Live Boot 0088 Execution (User Verification):**
+  1. *Automated Unlock Succeeded:* Screen automatically transitioned into SpringBoard Home Screen as designed.
+  2. *Erratic Touch Behavior Identified:* User reported touch feels erratic ("cảm ứng bị loạn") and the screen enters the home screen repeatedly by itself without the rock-solid stability of baseline `0082`.
+  3. *Root Cause of Touch Erraticism:* The timer `sweethidtest=5` continuously dispatches simulated swipe gestures `(540, 2200) -> (540, 800)` and Home presses every 5 seconds for 120 iterations (10 minutes). This floods userland with synthetic touch events that conflict with physical touches, causing erratic UI state.
+  4. *User Decision:* User requested pausing further changes ("khoan làm tiếp cho tôi") to preserve the stable baseline behaviour of `0082`.
+- **Available Baseline Artifact:**
+  - Stable baseline [`shim/out/shim-boot-0082.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0082.img) (26 MiB, rock-solid stable, clean UI, no phantom touch injection).
+- **Next Concrete Action:**
+  - Await user direction on whether to boot baseline `0082`, disable `sweethidtest` (`sweethidtest=0`), or calibrate physical Synaptics S3706 touch handling without simulated gestures.
 - **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**
   1. *SPMI Arbiter v5 Power & Volume Keys:*
      - Mapped full 1 MiB observer window (`ml_io_map(KEYS_OBS_PA, 0x100000)`).
