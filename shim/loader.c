@@ -76,17 +76,6 @@ static int magic_ok(const char *m)
 
 typedef void (*xnu_entry_t)(uint64_t boot_args_pa);
 
-static void boost_cpu_clocks(void)
-{
-	/* Qualcomm SM8150 EPSS / OSM: Boost all 3 CPU clusters to max frequency */
-	uintptr_t clusters[3] = { 0x18323000UL, 0x18325800UL, 0x18327800UL };
-	for (int i = 0; i < 3; i++) {
-		volatile uint32_t *base = (volatile uint32_t *)clusters[i];
-		base[0x320 / 4] = 0x0f;
-		base[0x920 / 4] = 0x0f;
-	}
-}
-
 const char *loader_boot(uintptr_t dtb)
 {
 	uint64_t rd_start, rd_end;
@@ -150,9 +139,6 @@ const char *loader_boot(uintptr_t dtb)
 	uintptr_t entry_pa = p->entry_va + pa_of_va_base;
 	con_hex("JUMP", entry_pa);
 	con_str("XNU", "jumping (fbcon clears screen)");
-
-	/* Boost all 8 Snapdragon 855 Kryo CPU cores to 2.84 GHz before jumping */
-	boost_cpu_clocks();
 
 	/* Everything was written with the MMU and caches off; drop any stale I-cache lines too. */
 	__asm__ volatile("dsb sy; ic iallu; dsb sy; isb" ::: "memory");
