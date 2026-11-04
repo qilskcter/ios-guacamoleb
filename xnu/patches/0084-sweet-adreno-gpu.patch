@@ -24,7 +24,7 @@
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,276 @@
+@@ -0,0 +1,275 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
@@ -185,11 +185,10 @@
 +		IOLog("SWEET GPU: Adreno 640 hardware accelerator active (chip_id=0x%08x)\n", fChipId);
 +	}
 +
-+	/* Publish properties for CoreAnimation RenderServer and Metal */
++	/* Publish properties for CoreAnimation RenderServer */
 +	setName("SweetAccelerator");
 +	setProperty("IOGPUDevice", kOSBooleanTrue);
-+	setProperty("IOGPUFamily", "Apple");
-+	setProperty("MetalPluginName", "AGXMetal");
++	setProperty("IOGPUFamily", "Generic");
 +	setProperty("IOGPUNumCommandQueues", 4ULL, 32);
 +	setProperty("IOGPUMaxSurfaces", 64ULL, 32);
 +	setProperty("IOGPUGlobalSharedStorageSize", 0x10000000ULL, 64);

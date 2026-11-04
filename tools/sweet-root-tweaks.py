@@ -211,7 +211,8 @@ def springboard_assets(root):
                 'com.apple.Siri',
                 'com.apple.Spotlight',
             ]
-        ]
+        ],
+        'today': []
     }
     for name in ('IconState.plist', 'DesiredIconState.plist'):
         dst = os.path.join(sb_dir, name)
@@ -241,6 +242,18 @@ def springboard_assets(root):
                 print('Installed springboard asset:', d)
 
 
+def posterboard(root):
+    for p in glob.glob(os.path.join(root, 'System/Library/LaunchAngels/com.apple.PosterBoard.plist')):
+        try:
+            st = os.stat(p)
+            data = load(p)
+            data['RunAtLoad'] = True
+            save(p, data, st.st_uid, st.st_gid, st.st_mode & 0o7777, plistlib.FMT_XML)
+            print('PosterBoard RunAtLoad enabled:', os.path.relpath(p, root))
+        except Exception as e:
+            print('Warning: could not patch PosterBoard plist:', e)
+
+
 def main():
     global BUILD, VERSION
     if len(sys.argv) != 2 or not os.path.isdir(os.path.join(sys.argv[1], 'System/Library/xpc')):
@@ -256,6 +269,7 @@ def main():
     containers(root)
     activation(root)
     audio(root)
+    posterboard(root)
     springboard_assets(root)
     merge_pref(root, 'com.apple.migration', {
         'LastSystemVersion': BUILD,
