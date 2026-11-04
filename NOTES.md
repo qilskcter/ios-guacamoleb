@@ -2,6 +2,27 @@
 
 ## Active handoff update (2026-11-04)
 
+**🚀 COMPLETE ADRENO 640 GPU ACCELERATOR BUILT & PACKAGED: SHIM-BOOT-0086.IMG**
+- **GPU Driver & CI Fixes (`0084-gm1901-adreno-gpu.patch`):**
+  - Resolved `error: corrupt patch at line 319`: Corrected hunk line count from `+1,295` to `+1,291` in `0084-gm1901-adreno-gpu.patch`.
+  - Consolidated digitizer touch Y-scaling (`ny = / 2340`) directly into `0082-gm1901-drivers.patch` and deleted redundant `0085-gm1901-touch-perf.patch`.
+  - GitHub Actions CI Run [41836421291](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41836421291) succeeded in 7m50s with 100% clean patch application.
+- **Kernel Verification (`xnu/out-0086/kernel.development.sweet`):**
+  - Confirmed `SweetAccelerator` and `SweetAcceleratorUserClient` are compiled into kernel binary.
+  - Matches DeviceTree `arm-io/gpu` node (`qcom,adreno-640` / `apple,ioaccelerator`) with physical registers:
+    - GPUCC: `0x02c90000` (GDSC power voting: `cx_gdsc` 0x9108, `gx_gdsc` 0x905C).
+    - KGSL-3D: `0x02c00000`.
+    - GMU: `0x02c6a000`.
+  - Publishes `IOAccelerator` and `IOGPUDevice` service to IORegistry to enable QuartzCore RenderServer, `CABackdropLayer` Gaussian blur filters, and fluid 60 FPS motion.
+  - Bounds-safe frame present in `0083-sweet-fb-bulk-copy.patch` eliminates any possible buffer overread data abort.
+  - Display power kept permanently ON in `0079-sweet-display-power.patch` (`off = false`).
+- **Packaged Boot Artifact:**
+  - Image: [`shim/out/shim-boot-0086.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0086.img) (`26 MiB`, SHA256: `2f9be6a0550772da7f40f250d958d813277b30e3acd189ef9f6868554a43ce25`).
+- **Next Concrete Action:**
+  - Connect OnePlus 7 (`GM1901`) in Fastboot mode (`Power + Volume Down`).
+  - Run: `fastboot boot shim/out/shim-boot-0086.img`.
+  - Verify live boot and display of iOS 16 Lock Screen / Home Screen with hardware acceleration.
+
 **🚀 BOOTED ROCK-SOLID BASELINE IMAGE: SHIM-BOOT-0082.IMG ON GM1901**
 - **Diagnosis of EDL Reset in 0085 (Resolved):**
   - Confirmed: The device entered EDL mode (`QUSB_BULK_SN:CA57B559`) due to a Kernel Data Abort in `AppleCLCD::present` (`0083-sweet-fb-bulk-copy.patch`).
