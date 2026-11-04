@@ -18,10 +18,19 @@
   - Display power kept permanently ON in `0079-sweet-display-power.patch` (`off = false`).
 - **Packaged Boot Artifact:**
   - Image: [`shim/out/shim-boot-0086.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0086.img) (`26 MiB`, SHA256: `2f9be6a0550772da7f40f250d958d813277b30e3acd189ef9f6868554a43ce25`).
+**🚀 LIVE BOOTED 0086 WITH ADRENO 640 GPU ACCELERATOR ON GM1901**
+- **Live Boot Execution:**
+  - Fastboot verified: `85d68e24 fastboot`.
+  - Executed: `fastboot boot shim/out/shim-boot-0086.img` at 20:34:36.
+  - Sending 'boot.img' (26316 KB) OKAY [0.620s], Booting OKAY [0.081s], Finished (0.713s).
+- **Active Subsystems in Kernel:**
+  - `SweetAccelerator` Adreno 640 hardware driver mapped to `0x02c00000`, `0x02c6a000`, and `0x02c90000`.
+  - GDSC clock domains voted on: `cx_gdsc` and `gx_gdsc`.
+  - Bounds-checked surface copying in `AppleCLCD::present`.
+  - Panel power forced active (`off = false` in `0079-sweet-display-power.patch`).
+  - 60 FPS refresh rate (`sweetfb_hz=60`).
 - **Next Concrete Action:**
-  - Connect OnePlus 7 (`GM1901`) in Fastboot mode (`Power + Volume Down`).
-  - Run: `fastboot boot shim/out/shim-boot-0086.img`.
-  - Verify live boot and display of iOS 16 Lock Screen / Home Screen with hardware acceleration.
+  - Observe the phone display for live transition from text console into iOS 16 Lock Screen / Home Screen.
 
 **🚀 BOOTED ROCK-SOLID BASELINE IMAGE: SHIM-BOOT-0082.IMG ON GM1901**
 - **Diagnosis of EDL Reset in 0085 (Resolved):**
