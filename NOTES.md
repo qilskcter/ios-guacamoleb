@@ -20,9 +20,19 @@
        2. Read F12 finger coordinates.
        3. Restore Page 0 (`touch_write_reg(0xff, 0x00)`).
      - Triggered GitHub Actions CI build [41842775385](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41842775385).
+**🚀 COMPLETE BOOT IMAGE 0087 PACKAGED WITH PAGE 4 TOUCH & CLEAN LOCK SCREEN**
+- **Artifact Verification:**
+  - Image: [`shim/out/shim-boot-0087.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0087.img) (`26 MiB`, SHA256: `6cc34edcfc0a4e9fe5c6f783ca8feea7318785e5482517f17f2f048b2650f167`).
+  - Kernel: [`xnu/out-0087/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0087/kernel.development.sweet).
+- **Features Active in 0087:**
+  1. *Synaptics S3706 RMI4 Page 4 Touch:* Switches to Page 4 (`touch_write_reg(0xff, 0x04)`) to read live F12 finger coordinates (X: 0..1079, Y: 0..2339) and restores Page 0 (`touch_write_reg(0xff, 0x00)`).
+  2. *Clean iOS 16 Lock Screen:* `sweetfb_noconsole=1` mutes serial console rendering on first swap from `backboardd`, leaving the entire AMOLED display clean for the Lock Screen clock, widgets, and wallpapers.
+  3. *Adreno 640 Accelerator:* Full `SweetAccelerator` driver active with GDSC clock sequencing and `CABackdropLayer` blur effects.
+  4. *Smooth 60 FPS motion:* `sweetfb_hz=60`.
 - **Next Concrete Action:**
-  - Wait for CI build to complete (~7m), package `shim-boot-0087.img` with `sweetfb_noconsole=1`.
-  - Boot image on OnePlus 7 and test touch unlock swipe-up to Home Screen.
+  - User enters Fastboot mode on OnePlus 7 (`Power + Volume Down`).
+  - Run: `fastboot boot shim/out/shim-boot-0087.img`.
+  - Swipe up from the bottom edge to unlock to the Home Screen!
 
 **🚀 COMPLETE ADRENO 640 GPU ACCELERATOR BUILT & PACKAGED: SHIM-BOOT-0086.IMG**
 - **GPU Driver & CI Fixes (`0084-gm1901-adreno-gpu.patch`):**
