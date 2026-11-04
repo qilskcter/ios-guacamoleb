@@ -1,6 +1,5 @@
-diff -ruN a/bsd/dev/sweet_keys.c b/bsd/dev/sweet_keys.c
---- a/bsd/dev/sweet_keys.c	2026-11-04 22:35:46
-+++ b/bsd/dev/sweet_keys.c	2026-11-04 22:40:53
+--- a/bsd/dev/sweet_keys.c
++++ b/bsd/dev/sweet_keys.c
 @@ -1,6 +1,10 @@
  /*
 - * Minimal polled SWEET keys. Call once after the scheduler is running.
@@ -33,7 +32,7 @@ diff -ruN a/bsd/dev/sweet_keys.c b/bsd/dev/sweet_keys.c
  static uint32_t keys_version, keys_last_status;
  static bool keys_started;
  static int keys_sleep_chan;
-@@ -98,23 +107,31 @@
+@@ -98,23 +107,29 @@
  	(void)arg;
  	(void)result;
  	for (;;) {
@@ -54,8 +53,7 @@ diff -ruN a/bsd/dev/sweet_keys.c b/bsd/dev/sweet_keys.c
  			if ((errors++ % 250u) == 0) {
 -				printf("SWEET KEYS: read error pon-ok=%d gpio-ok=%d arb-status=%#x\n",
 -				    pok, gok, keys_last_status);
-+				printf("SWEET KEYS: read error pon-ok=%d up-ok=%d dn-ok=%d arb-status=%#x
-+",
++				printf("SWEET KEYS: read error pon-ok=%d up-ok=%d dn-ok=%d arb-status=%#x\n",
 +				    pok, uok, dok, keys_last_status);
  			}
  		} else {
@@ -68,13 +66,12 @@ diff -ruN a/bsd/dev/sweet_keys.c b/bsd/dev/sweet_keys.c
  				state[k] = now[k];
 -				printf("SWEET KEYS: key=%d down=%d pon=%#x gpio4:c110=%#x\n",
 -				    k, state[k], pon, gpio);
-+				printf("SWEET KEYS: key=%d down=%d pon=%#x gpio6=%#x gpio7=%#x
-+",
++				printf("SWEET KEYS: key=%d down=%d pon=%#x gpio6=%#x gpio7=%#x\n",
 +				    k, state[k], pon, up, dn);
  				sweet_hid_key(k, state[k]);
  			}
  		}
-@@ -122,6 +139,27 @@
+@@ -122,6 +137,25 @@
  	}
  }
  
@@ -86,14 +83,12 @@ diff -ruN a/bsd/dev/sweet_keys.c b/bsd/dev/sweet_keys.c
 +	bool mok = keys_read(apid, base + 0x40u, &mode);
 +	bool eok = keys_read(apid, base + 0x46u, &en);
 +	bool sok = keys_read(apid, base + 0x05u, &subtype);
-+	printf("SWEET KEYS: %s apid=%u rt=%#x/%d mode=%#x/%d en=%#x/%d subtype=%#x/%d
-+",
++	printf("SWEET KEYS: %s apid=%u rt=%#x/%d mode=%#x/%d en=%#x/%d subtype=%#x/%d\n",
 +	    label, apid, rt, rok, mode, mok, en, eok, subtype, sok);
 +	unsigned dir = (subtype >= 0x10u && subtype <= 0x13u) ?
 +	    (mode & 3u) : ((mode >> 4) & 7u);
 +	if (!rok || !eok || !mok || !sok || !(en & 0x80u) || (dir != 0 && dir != 2)) {
-+		printf("SWEET KEYS: %s not confirmed enabled as input; withheld
-+", label);
++		printf("SWEET KEYS: %s not confirmed enabled as input; withheld\n", label);
 +		return false;
 +	}
 +	return true;
@@ -102,26 +97,22 @@ diff -ruN a/bsd/dev/sweet_keys.c b/bsd/dev/sweet_keys.c
  void
  sweet_keys_init(void)
  {
-@@ -138,39 +176,38 @@
+@@ -138,7 +172,7 @@
  	}
  	keys_core = ml_io_map(KEYS_CORE_PA, 0x2000);
  	keys_cnfg = ml_io_map(KEYS_CNFG_PA, 0x1000);
 -	keys_obs = ml_io_map(KEYS_OBS_PA, 0x10000);
 +	keys_obs = ml_io_map(KEYS_OBS_PA, 0x100000);
  	if (!keys_core || !keys_cnfg || !keys_obs) {
--		printf("SWEET KEYS: MMIO mapping failed\n");
-+		printf("SWEET KEYS: MMIO mapping failed
-+");
+ 		printf("SWEET KEYS: MMIO mapping failed\n");
  		return;
- 	}
+@@ -146,30 +180,25 @@
  	keys_version = keys_rd(keys_core, 0);
  	uint32_t count = keys_rd(keys_core, 4) & 0x7ffu;
  	if (keys_version < 0x50000000u || keys_version >= 0x70000000u ||
 -	    count == 0 || count > 512) {
--		printf("SWEET KEYS: unsupported arbiter version=%#x apids=%u\n",
 +	    count == 0 || count > 1024) {
-+		printf("SWEET KEYS: unsupported arbiter version=%#x apids=%u
-+",
+ 		printf("SWEET KEYS: unsupported arbiter version=%#x apids=%u\n",
  		    keys_version, count);
  		return;
  	}
@@ -145,26 +136,21 @@ diff -ruN a/bsd/dev/sweet_keys.c b/bsd/dev/sweet_keys.c
 -	if (!eok || !mok || !sok || !(en & 0x80u) || (dir != 0 && dir != 2)) {
 -		printf("SWEET KEYS: GPIO2 not confirmed enabled as input; volume-up withheld, PMIC unchanged\n");
 -		keys_gpio_apid = KEYS_NO_APID;
-+	printf("SWEET KEYS: arb=%#x apids=%u pon-apid=%u pon=%#x/%d
-+",
++	printf("SWEET KEYS: arb=%#x apids=%u pon-apid=%u pon=%#x/%d\n",
 +	    keys_version, count, keys_pon_apid, pon, pok);
 +	if (!keys_check_gpio(keys_up_apid, 0xc500u, "PM8150-GPIO6(vol-up)")) {
 +		keys_up_apid = KEYS_NO_APID;
  	}
 -	if (!pok && !gok) {
--		printf("SWEET KEYS: no readable keys; polling retained for recovery\n");
 +	if (!keys_check_gpio(keys_dn_apid, 0xc600u, "PM8150-GPIO7(vol-dn)")) {
 +		keys_dn_apid = KEYS_NO_APID;
 +	}
 +	if (!pok && keys_up_apid == KEYS_NO_APID && keys_dn_apid == KEYS_NO_APID) {
-+		printf("SWEET KEYS: no readable keys; polling retained for recovery
-+");
+ 		printf("SWEET KEYS: no readable keys; polling retained for recovery\n");
  	}
  	kern_return_t kr = kernel_thread_start(keys_thread, NULL, &thread);
- 	if (kr == KERN_SUCCESS) {
-diff -ruN a/bsd/dev/sweet_rpmh.c b/bsd/dev/sweet_rpmh.c
---- a/bsd/dev/sweet_rpmh.c	2026-11-04 22:35:46
-+++ b/bsd/dev/sweet_rpmh.c	2026-11-04 22:36:38
+--- a/bsd/dev/sweet_rpmh.c
++++ b/bsd/dev/sweet_rpmh.c
 @@ -328,7 +328,8 @@
  sweet_rpmh_vreg_enable(const char *res, unsigned mv)
  {
@@ -175,9 +161,8 @@ diff -ruN a/bsd/dev/sweet_rpmh.c b/bsd/dev/sweet_rpmh.c
  		printf("SWEET RPMH: expected ldoc11 and 2950..3400 mV\n");
  		return EINVAL;
  	}
-diff -ruN a/bsd/dev/sweet_touch.c b/bsd/dev/sweet_touch.c
---- a/bsd/dev/sweet_touch.c	2026-11-04 22:35:46
-+++ b/bsd/dev/sweet_touch.c	2026-11-04 22:59:37
+--- a/bsd/dev/sweet_touch.c
++++ b/bsd/dev/sweet_touch.c
 @@ -1,9 +1,13 @@
  /*
 - * SWEET SE7 FIFO I2C / GT9896 Yellowstone / Focaltech 54:52 bring-up.
@@ -600,6 +585,8 @@ diff -ruN a/bsd/dev/sweet_touch.c b/bsd/dev/sweet_touch.c
 -	return ((unsigned)p[0] << 8) | p[1];
 -}
 -
+-static bool
+-touch_checksum(const uint8_t *buf, unsigned len)
 +/*
 + * Synaptics S3706 RMI4 Page 0 PDT discovery and F12 2D touch reporting.
 + * Reversed from synaptics_driver_s3706.o (touch_get_point_data @ 0x6280):
@@ -613,8 +600,7 @@ diff -ruN a/bsd/dev/sweet_touch.c b/bsd/dev/sweet_touch.c
 + *     x    = ((p[2] & 0x0f) << 8) | p[1]   (0..1079)
 + *     y    = ((p[4] & 0x0f) << 8) | p[3]   (0..2339)
 + */
- static bool
--touch_checksum(const uint8_t *buf, unsigned len)
++static bool
 +touch_s3706_probe(void)
  {
 -	if (len < 2) {
@@ -784,17 +770,7 @@ diff -ruN a/bsd/dev/sweet_touch.c b/bsd/dev/sweet_touch.c
 -		unsigned id = p[2] >> 4, event = p[0] >> 6;
 -		if (id >= TOUCH_MAX) {
 -			break; /* vendor's unused-record sentinel */
-+		const uint8_t *p = buf + i * 8u;
-+		uint8_t type = p[0] & 0x0fu;
-+		if (type == 1u || type == 2u) {
-+			unsigned px = ((unsigned)(p[2] & 0x0fu) << 8) | p[1];
-+			unsigned py = ((unsigned)(p[4] & 0x0fu) << 8) | p[3];
-+			if (px <= 1079u && py <= 2339u) {
-+				mask |= 1u << i;
-+				x[i] = (int)px;
-+				y[i] = (int)py;
-+			}
- 		}
+-		}
 -		if (seen & (1u << id)) {
 -			return EIO;
 -		}
@@ -809,7 +785,17 @@ diff -ruN a/bsd/dev/sweet_touch.c b/bsd/dev/sweet_touch.c
 -		unsigned py = ((unsigned)(p[2] & 15u) << 8) | p[3];
 -		if (px > 1079 || py > 2399) {
 -			return EIO;
--		}
++		const uint8_t *p = buf + i * 8u;
++		uint8_t type = p[0] & 0x0fu;
++		if (type == 1u || type == 2u) {
++			unsigned px = ((unsigned)(p[2] & 0x0fu) << 8) | p[1];
++			unsigned py = ((unsigned)(p[4] & 0x0fu) << 8) | p[3];
++			if (px <= 1079u && py <= 2339u) {
++				mask |= 1u << i;
++				x[i] = (int)px;
++				y[i] = (int)py;
++			}
+ 		}
 -		mask |= 1u << id;
 -		x[id] = (int)px;
 -		y[id] = (int)py;
@@ -998,9 +984,8 @@ diff -ruN a/bsd/dev/sweet_touch.c b/bsd/dev/sweet_touch.c
  	}
  	touch_report(0, st.x, st.y);
  out:
-diff -ruN a/bsd/dev/sweet_usb.c b/bsd/dev/sweet_usb.c
---- a/bsd/dev/sweet_usb.c	2026-11-04 22:35:46
-+++ b/bsd/dev/sweet_usb.c	2026-11-04 22:36:38
+--- a/bsd/dev/sweet_usb.c
++++ b/bsd/dev/sweet_usb.c
 @@ -54,10 +54,10 @@
  	{ "master", 0x0f010 },
  	{ "sleep", 0x0f014 },
@@ -1016,10 +1001,18 @@ diff -ruN a/bsd/dev/sweet_usb.c b/bsd/dev/sweet_usb.c
  };
  
  #define DWC3_PA                 0x0a600000
-diff -ruN a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cpp
---- a/iokit/Kernel/arm/hid/SweetHID.cpp	2026-11-04 22:35:46
-+++ b/iokit/Kernel/arm/hid/SweetHID.cpp	2026-11-04 22:36:38
-@@ -420,9 +420,18 @@
+--- a/iokit/Kernel/arm/hid/SweetHID.cpp
++++ b/iokit/Kernel/arm/hid/SweetHID.cpp
+@@ -408,6 +408,8 @@
+ 		event->release();
+ 	}
+ }
++
++extern "C" void sweet_hid_touch(int finger, int down, int x, int y);
+ 
+ void
+ SweetHIDButtons::testFired(OSObject *owner, IOTimerEventSource *sender)
+@@ -420,9 +422,18 @@
  	 */
  	bool press = (self->fTestCount & 1) == 0;
  	self->key(kHIDUsage_Csmr_Menu, press);
@@ -1040,7 +1033,7 @@ diff -ruN a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cp
  }
  
  bool
-@@ -435,9 +444,9 @@
+@@ -435,9 +446,9 @@
  	int native = 0;
  	PE_parse_boot_argn("sweetfb_native", &native, sizeof(native));
  	fLogicalW = native ? 1080 : 1125;
@@ -1052,7 +1045,7 @@ diff -ruN a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cp
  	/* The digitizer covers the main display (backboardd maps it 1:1). */
  	setProperty("DisplayIntegrated", kOSBooleanTrue);
  	setProperty("SurfaceWidth", (unsigned long long)(68 << 16), 32);	/* mm, 16.16 */
-@@ -459,7 +468,7 @@
+@@ -459,7 +470,7 @@
  		return;
  	}
  	x = x < 0 ? 0 : (x > 1079 ? 1079 : x);
@@ -1061,7 +1054,7 @@ diff -ruN a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cp
  
  	IOLockLock(fLock);
  	bool was = fDown[finger];
-@@ -473,7 +482,7 @@
+@@ -473,7 +484,7 @@
  	}
  	if (!was && down) {
  		fEdge[finger] = x < SWEET_TOUCH_EDGE_PX || x > 1079 - SWEET_TOUCH_EDGE_PX ||
@@ -1070,9 +1063,8 @@ diff -ruN a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cp
  	}
  
  	collection = IOHIDEvent::digitizerEvent(now, 0, kIOHIDDigitizerTransducerTypeHand, false, 0, 0, 0);
-diff -ruN a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
---- a/osfmk/arm64/sweet_early.c	2026-11-04 22:35:46
-+++ b/osfmk/arm64/sweet_early.c	2026-11-04 22:36:38
+--- a/osfmk/arm64/sweet_early.c
++++ b/osfmk/arm64/sweet_early.c
 @@ -1,5 +1,5 @@
  /*
 - * Redmi Note 10 Pro bootstrap console. No allocation, locks, ADT parsing or
