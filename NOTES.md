@@ -2,16 +2,18 @@
 
 ## Active handoff update (2026-11-04)
 
-**🚀 SHIM-BOOT-0088: SPMI POWER KEYS & AUTOMATED SWIPE-UP UNLOCK TO SPRINGBOARD HOME SCREEN**
-- **Diagnosis of Live Boot 0088 Execution (User Verification):**
-  1. *Automated Unlock Succeeded:* Screen automatically transitioned into SpringBoard Home Screen as designed.
-  2. *Erratic Touch Behavior Identified:* User reported touch feels erratic ("cảm ứng bị loạn") and the screen enters the home screen repeatedly by itself without the rock-solid stability of baseline `0082`.
-  3. *Root Cause of Touch Erraticism:* The timer `sweethidtest=5` continuously dispatches simulated swipe gestures `(540, 2200) -> (540, 800)` and Home presses every 5 seconds for 120 iterations (10 minutes). This floods userland with synthetic touch events that conflict with physical touches, causing erratic UI state.
-  4. *User Decision:* User requested pausing further changes ("khoan làm tiếp cho tôi") to preserve the stable baseline behaviour of `0082`.
-- **Available Baseline Artifact:**
-  - Stable baseline [`shim/out/shim-boot-0082.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0082.img) (26 MiB, rock-solid stable, clean UI, no phantom touch injection).
+**🚀 SHIM-BOOT-0089: CLEAN BOOT IMAGE WITHOUT SIMULATED GESTURES (SWEETHIDTEST=0)**
+- **User Request & Diagnosis:**
+  - In `shim-boot-0088.img`, `sweethidtest=5` injected continuous swipe gestures `(540, 2200) -> (540, 800)` every 5s, causing phantom touch inputs and making the UI enter the home screen repeatedly without stability.
+  - User requested disabling this erratic behavior immediately and restoring rock-solid stability like `0082`.
+- **Immediate Fix Implemented Locally:**
+  - Packaged [`shim/out/payload-0089.bin`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/payload-0089.bin) with `sweethidtest=0`.
+  - Timer in `SweetHID.cpp` is completely disabled (`fTestSecs = 0`, never instantiated). Zero phantom gestures or simulated touches.
+  - Retains full Adreno 640 GPU hardware acceleration, bounds-checked framebuffer present, 60 Hz display, clean UI (`sweetfb_noconsole=1`), SPMI Power/Volume keys, and native physical Synaptics S3706 touch engine.
+- **Packaged Boot Artifact:**
+  - Image: [`shim/out/shim-boot-0089.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0089.img) (26 MiB, SHA256: `84bc181dbd96ea2eac9c7cee3454db99d950aecb6b37e065873d1640621ab862`).
 - **Next Concrete Action:**
-  - Await user direction on whether to boot baseline `0082`, disable `sweethidtest` (`sweethidtest=0`), or calibrate physical Synaptics S3706 touch handling without simulated gestures.
+  - User boots device into Fastboot Mode (hold Power + Vol Down) and boots `shim/out/shim-boot-0089.img`.
 - **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**
   1. *SPMI Arbiter v5 Power & Volume Keys:*
      - Mapped full 1 MiB observer window (`ml_io_map(KEYS_OBS_PA, 0x100000)`).
