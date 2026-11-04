@@ -16,19 +16,24 @@
   2. *Ultra-Low Latency Touch:* `bsd/dev/sweet_touch.c` report read trimmed from 80 bytes to 16 bytes (2 fingers), cutting I2C bit-bang CPU busy-wait time by 80%.
   3. *Precise Digitizer Calibration:* Y-axis coordinate scaling corrected from `/ 2400` down to `/ 2340` (OnePlus 7 AMOLED height) for fluid 1:1 finger tracking.
   4. *SpringBoard & PosterBoard Integration:* Rootfs contains official iOS 16 wallpapers and clean 2-page app layout with `RunAtLoad = True` on PosterBoard.
-- **Current Device State & Live Boot Execution:**
-  - OnePlus 7 (`GM1901` / `guacamoleb`, Snapdragon 855, serial `85d68e24`).
-  - Fresh bootloader session established via restart bootloader.
-  - Successfully booted clean [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) at 16:41:56:
-    - `Sending 'boot.img' (26308 KB) OKAY [0.622s]`
-    - `Booting OKAY [0.081s]`
-    - Total time: `0.719s`.
-  - Device USB bus verified: NO EDL fallback (`QUSB_BULK` absent); running iOS 16 with the newly flashed 16:31 clean rootfs (PosterBoard `RunAtLoad` loop eliminated, 16-byte I2C touch reduction active, 2340 digitizer scaling active).
+- **Adreno 640 & GPU Subsystem Deep REA Reverse-Engineering (2026-11-04):**
+  - Analyzed OnePlus 7 OxygenOS 10 kernel (`research/gm1901/Image_reloc.bin`) and hardware DTB (`dtb/live-gm1901.dtb`):
+    - Subsystem layout:
+      1. `gpucc`: `0x02c90000` (size `0x9000`), controls GPU clock branches and power domains.
+      2. `cx_gdsc`: GDSC power control register at offset `0x9108` within `gpucc`.
+      3. `gx_gdsc`: GDSC 3D graphics core power control register at offset `0x905c` within `gpucc`.
+      4. `gpu_cc_ahb_clk`: branch enable/halt register at `0x1078`.
+      5. `gmu`: `0x02c6a000` (192 KiB).
+      6. `kgsl-3d0`: `0x02c00000` (256 KiB).
+    - Hardware Interlock Finding: Disassembly of `gmu_reg_write` (`0xffffff8008877730`) confirmed `tbz w9, #6` (`GMU_FLAG_CLKS_ON` = `0x40`). Any register read/write to `0x02c00000` or `0x02c6a000` while `cx_gdsc` and `gpu_cc_ahb_clk` are dormant causes an immediate Qualcomm Hardware NOC Bus Fault, resetting the PMIC into EDL (`QUSB_BULK`).
+    - Metal Architecture Mismatch: Userland `AGXMetal.bundle` is hardcoded for Apple G10 GPU microcode (iPhone X A11). Adreno 640 uses Qualcomm A6xx ISA. Frame presentation is safely handled through `AppleCLCD` / `CA::Render::SoftwareContext`.
+- **Current Device State & Diagnostic Image:**
+  - Photo 2 confirmed `launchd` loaded all 42 shared cache fragments (`dyld_shared_cache_arm64.42.dyldlinkedit`).
+  - Screen went black due to `sweetfb_noconsole=1`.
+  - Prepared [`shim/out/shim-boot-0085-debug.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085-debug.img) with `sweetfb_noconsole=0` so console remains 100% visible throughout SpringBoard execution.
 - **Next Concrete Action:**
-  - User observes phone display over the next 15-30 seconds for:
-    1. Home Screen / Lock Screen presentation.
-    2. Swiping fluidity and touch responsiveness.
-    3. Wallpapers and stock app icons suite.
+  - User exits EDL to Fastboot (hold Power + Vol- 10-15s).
+  - Boot `shim/out/shim-boot-0085-debug.img` to view the continuous live console without screen blanking.
 - **Current Device State:**
   - Successfully booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`0.715s`, status `OKAY`).
   - Device is running iOS 16 with the updated rootfs flashed at 15:32 (PosterBoard `RunAtLoad = True`, `today: []` in `IconState.plist`).
