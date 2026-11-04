@@ -2,6 +2,18 @@
 
 ## Active handoff update (2026-11-04)
 
+**🔍 LIVE BOOT EXECUTION ANALYSIS: USERLAND DAEMON LAUNCH REACHED, DISPLAY BLANKING IDENTIFIED**
+- **Analysis of Live Display Output (Photo 2 / `uploaded_media_1793786565951.jpg`):**
+  - Text console successfully executed all EarlyBoot setup tasks: `mount-phase-1`, `data-protection`, `commit-boot-mode`, `mount-phase-2`, `keybag`, `dirs_cleaner`, and `init_featureflags`.
+  - Reached daemon execution phase (PID > 50): `usermanagerd` created Universal Persona (`Created Universal Persona Successfully`) and logged `PersonaID:1000 is already loaded to kernel, skipping`.
+  - At this exact boundary, `launchd` spawns the userland window server and input subsystems: `backboardd`, `watchdogd`, `thermalmonitord`, and `SpringBoard`.
+- **Root Cause of Sudden Screen Blanking ("Màn hình sụp tắt"):**
+  1. *Console Muting on First Swap:* In [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img), `sweetfb_noconsole=1` triggers `sweet_console_muted = 1` as soon as `backboardd` connects to `AppleCLCD` and performs the first surface swap, freezing all subsequent text output.
+  2. *Display Power-Off Fade:* In [`xnu/patches/0079-sweet-display-power.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0079-sweet-display-power.patch), `kSweetFBRequestPowerChange(0)` sets `fPowerOff = true`, causing `vblankTimeout` in `SweetFramebuffer.cpp` to halve all pixels across 6 vsyncs down to pure black (`0x00000000`). On AMOLED, this produces the visual appearance of a total power loss / crash.
+  3. *Accidental EDL Mode Entry:* When the screen went black, pressing Power + Volume Up (the OnePlus hardware emergency recovery combo) immediately forced the Snapdragon 855 SoC into Qualcomm Emergency Download Mode (`QUSB_BULK_SN:CA57B559`).
+- **Immediate Recovery Instruction:**
+  - Hold **Power + Volume Down** (NOT Volume Up) for 10-15 seconds until Fastboot Mode reappears.
+
 **🎉🎉🎉 REAL ROOT CAUSE OF EDL FAULT ISOLATED & FIXED: BOOST_CPU_CLOCKS() REMOVED FROM SHIM/LOADER.C!**
 - **NOC / XPU Bus Fault Diagnosis & Root Cause:**
   - When the screen showed "1 đoạn mã" (`XNU: jumping (fbcon clears screen)`), `shim/loader.c` was calling `boost_cpu_clocks()`, which directly performed raw physical writes to Snapdragon 855 OSM/EPSS registers (`0x18323000`, `0x18325800`, `0x18327800`).
