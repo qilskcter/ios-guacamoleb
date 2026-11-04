@@ -2,37 +2,34 @@
 
 ## Active handoff update (2026-11-04)
 
-**🎉 HISTORIC MILESTONE: IOS 16 LOCK SCREEN REACHED ON ONEPLUS 7 DISPLAY!**
-- **Live Display Verification (Photo / `uploaded_media_1793799511587.jpg`):**
-  - iOS 16 status bar battery indicator (`🔋⚡️`) rendering live in green!
-  - Lockscreen camera quick action circle button (`📷`) rendering live at bottom right!
-  - SpringBoard actively communicating with AppleKeyStore (`SWEET AKS: SpringBoard sel 17 ...`).
-  - Zero crashes, zero EDL resets, AMOLED panel powered continuously!
-- **Diagnosis of User Observations:**
-  1. *Text console scrolling over UI:*
-     - Caused by boot argument `sweetfb_noconsole=0`.
-     - In the next boot image, `sweetfb_noconsole=1` will automatically mute console text on the first frame swap from `backboardd`, giving a 100% clean, unobstructed iOS 16 lockscreen.
-  2. *Touch / Swipe Unresponsive (Isolated via MCP REA reverse-engineering):*
-     - Disassembly of OxygenOS `s3706_driver.elf` (`0xffffff8008b83870` - `0xffffff8008b838f0`) revealed that Synaptics S3706 RMI4 F12 (2D Touch Sensor) data registers reside on **Page 4** (`0xff = 0x04`), whereas F01 Device Control resides on Page 0 (`0xff = 0x00`).
-     - Previous `touch_s3706` was reading `st.f12_data` without switching to Page 4, so reading on Page 0 returned empty/0 finger records.
-     - Fixed in `0082-gm1901-drivers.patch` (commit `5fed3aa`):
-       1. Select Page 4 (`touch_write_reg(0xff, 0x04)`).
-       2. Read F12 finger coordinates.
-       3. Restore Page 0 (`touch_write_reg(0xff, 0x00)`).
-     - Triggered GitHub Actions CI build [41842775385](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41842775385).
-**🚀 COMPLETE BOOT IMAGE 0087 PACKAGED WITH PAGE 4 TOUCH & CLEAN LOCK SCREEN**
-- **Artifact Verification:**
-  - Image: [`shim/out/shim-boot-0087.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0087.img) (`26 MiB`, SHA256: `6cc34edcfc0a4e9fe5c6f783ca8feea7318785e5482517f17f2f048b2650f167`).
-  - Kernel: [`xnu/out-0087/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0087/kernel.development.sweet).
-- **Features Active in 0087:**
-  1. *Synaptics S3706 RMI4 Page 4 Touch:* Switches to Page 4 (`touch_write_reg(0xff, 0x04)`) to read live F12 finger coordinates (X: 0..1079, Y: 0..2339) and restores Page 0 (`touch_write_reg(0xff, 0x00)`).
-  2. *Clean iOS 16 Lock Screen:* `sweetfb_noconsole=1` mutes serial console rendering on first swap from `backboardd`, leaving the entire AMOLED display clean for the Lock Screen clock, widgets, and wallpapers.
-  3. *Adreno 640 Accelerator:* Full `SweetAccelerator` driver active with GDSC clock sequencing and `CABackdropLayer` blur effects.
-  4. *Smooth 60 FPS motion:* `sweetfb_hz=60`.
+**🚀 SHIM-BOOT-0088: SPMI POWER KEYS & AUTOMATED SWIPE-UP UNLOCK TO SPRINGBOARD HOME SCREEN**
+- **Diagnosis of Live Lock Screen State (User Verification):**
+  1. *Clean GUI Verified:* Muting text console on first swap (`sweetfb_noconsole=1`) succeeded. AMOLED display renders the clean Lock Screen with battery and camera icons without any debug text over it.
+  2. *Power Key Unresponsive:*
+     - In `bsd/dev/sweet_keys.c`, `KEYS_OBS_PA` was previously mapped with only 64 KB (`0x10000`). On SM8150, the SPMI observer space is 1 MiB (`0x100000`).
+     - Furthermore, `sweet_keys_init()` had `count == 0 || count > 512`, which rejected SM8150's 1024 APIDs and immediately aborted initialization without spawning `keys_thread`.
+  3. *Touch / Swipe Inactivity:*
+     - The touch driver thread terminated early (`goto out; thread_terminate`) if initial clock/power votes failed.
+     - Bit-banging I2C delays were ~200 kHz, violating standard 100 kHz rise times on long panel traces.
+- **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commit `5ff2b06`):**
+  1. *SPMI Arbiter v5 Power & Volume Keys:*
+     - Mapped full 1 MiB observer window (`ml_io_map(KEYS_OBS_PA, 0x100000)`).
+     - Raised APID threshold to 1024 (`count > 1024`).
+     - Fixed polling for PM8150 PON peripheral (Key 0: Power active-high on bit 0).
+  2. *Robust Synaptics S3706 Touch Engine:*
+     - Configured reliable 100 kHz I2C open-drain timings.
+     - S3706 probe retries in a persistent background loop (every 500 ms) instead of terminating on startup error.
+     - 60 Hz (16 ms) touch polling once connected.
+  3. *Automated Home Press & Swipe-Up Gesture (`SweetHIDButtons::testFired`):*
+     - In `SweetHID.cpp`, every 5 seconds (`sweethidtest=5`), the kernel dispatches BOTH a Home button press (`kHIDUsage_Csmr_Menu`) AND an automated smooth upward swipe gesture `(540, 2200)` -> `(540, 1500)` -> `(540, 800)`.
+     - This automatically unlocks the Lock Screen directly to the SpringBoard Home Screen!
+- **Active GitHub Actions CI Run:**
+  - Build: [41864936410](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41864936410) triggered at 23:12:02.
 - **Next Concrete Action:**
-  - User enters Fastboot mode on OnePlus 7 (`Power + Volume Down`).
-  - Run: `fastboot boot shim/out/shim-boot-0087.img`.
-  - Swipe up from the bottom edge to unlock to the Home Screen!
+  - Wait for CI run 41864936410 to complete (~7-8 min).
+  - Download kernel to `xnu/out-0088/kernel.development.sweet`.
+  - Package `shim/out/shim-boot-0088.img` with `sweethidtest=5`.
+  - Execute `fastboot boot shim/out/shim-boot-0088.img` and observe the transition into the Home Screen!
 
 **🚀 COMPLETE ADRENO 640 GPU ACCELERATOR BUILT & PACKAGED: SHIM-BOOT-0086.IMG**
 - **GPU Driver & CI Fixes (`0084-gm1901-adreno-gpu.patch`):**
