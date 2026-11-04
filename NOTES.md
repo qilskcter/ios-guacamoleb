@@ -16,14 +16,13 @@
   2. *Ultra-Low Latency Touch:* `bsd/dev/sweet_touch.c` report read trimmed from 80 bytes to 16 bytes (2 fingers), cutting I2C bit-bang CPU busy-wait time by 80%.
   3. *Precise Digitizer Calibration:* Y-axis coordinate scaling corrected from `/ 2400` down to `/ 2340` (OnePlus 7 AMOLED height) for fluid 1:1 finger tracking.
   4. *SpringBoard & PosterBoard Integration:* Rootfs contains official iOS 16 wallpapers and clean 2-page app layout with `RunAtLoad = True` on PosterBoard.
-- **Current Device State & Live Rootfs Flashing:**
+- **Current Device State & Flash Milestone Completed:**
   - OnePlus 7 (`GM1901` / `guacamoleb`, Snapdragon 855, serial `85d68e24`).
-  - Clean iOS rootfs generated at 16:31: `/Users/nguyendinhkhanh/Downloads/ios-root-16g.simg` (11 GiB, 11,652,856,812 bytes) incorporating commit `75460ef` (PosterBoard `RunAtLoad = True` purged).
-  - Executing `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg` across 15 sparse chunks (task `task-5369`).
-  - Boot image ready: [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) (clean kernel 0085 with 16-byte I2C touch reduction and 2340 scaling).
+  - Completed `fastboot flash userdata /Users/nguyendinhkhanh/Downloads/ios-root-16g.simg` (11 GiB) across all 15 chunks in 416.416s (status `OKAY`).
+  - ABL USB bulk pipe locked after 11 GB flash (standard Qualcomm ABL behavior).
 - **Next Concrete Action:**
-  - Wait for `fastboot flash userdata` completion (~4-5 mins).
-  - Restart bootloader / boot [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img).
+  - User selects "Restart bootloader" on the phone or replugs USB cable.
+  - Execute `fastboot boot shim/out/shim-boot-0085.img` to start iOS 16 with the clean 16:31 rootfs.
 - **Current Device State:**
   - Successfully booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`0.715s`, status `OKAY`).
   - Device is running iOS 16 with the updated rootfs flashed at 15:32 (PosterBoard `RunAtLoad = True`, `today: []` in `IconState.plist`).
