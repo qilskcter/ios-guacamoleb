@@ -2,6 +2,28 @@
 
 ## Active handoff update (2026-11-04)
 
+**🎉 HISTORIC MILESTONE: IOS 16 LOCK SCREEN REACHED ON ONEPLUS 7 DISPLAY!**
+- **Live Display Verification (Photo / `uploaded_media_1793799511587.jpg`):**
+  - iOS 16 status bar battery indicator (`🔋⚡️`) rendering live in green!
+  - Lockscreen camera quick action circle button (`📷`) rendering live at bottom right!
+  - SpringBoard actively communicating with AppleKeyStore (`SWEET AKS: SpringBoard sel 17 ...`).
+  - Zero crashes, zero EDL resets, AMOLED panel powered continuously!
+- **Diagnosis of User Observations:**
+  1. *Text console scrolling over UI:*
+     - Caused by boot argument `sweetfb_noconsole=0`.
+     - In the next boot image, `sweetfb_noconsole=1` will automatically mute console text on the first frame swap from `backboardd`, giving a 100% clean, unobstructed iOS 16 lockscreen.
+  2. *Touch / Swipe Unresponsive (Isolated via MCP REA reverse-engineering):*
+     - Disassembly of OxygenOS `s3706_driver.elf` (`0xffffff8008b83870` - `0xffffff8008b838f0`) revealed that Synaptics S3706 RMI4 F12 (2D Touch Sensor) data registers reside on **Page 4** (`0xff = 0x04`), whereas F01 Device Control resides on Page 0 (`0xff = 0x00`).
+     - Previous `touch_s3706` was reading `st.f12_data` without switching to Page 4, so reading on Page 0 returned empty/0 finger records.
+     - Fixed in `0082-gm1901-drivers.patch` (commit `5fed3aa`):
+       1. Select Page 4 (`touch_write_reg(0xff, 0x04)`).
+       2. Read F12 finger coordinates.
+       3. Restore Page 0 (`touch_write_reg(0xff, 0x00)`).
+     - Triggered GitHub Actions CI build [41842775385](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41842775385).
+- **Next Concrete Action:**
+  - Wait for CI build to complete (~7m), package `shim-boot-0087.img` with `sweetfb_noconsole=1`.
+  - Boot image on OnePlus 7 and test touch unlock swipe-up to Home Screen.
+
 **🚀 COMPLETE ADRENO 640 GPU ACCELERATOR BUILT & PACKAGED: SHIM-BOOT-0086.IMG**
 - **GPU Driver & CI Fixes (`0084-gm1901-adreno-gpu.patch`):**
   - Resolved `error: corrupt patch at line 319`: Corrected hunk line count from `+1,295` to `+1,291` in `0084-gm1901-adreno-gpu.patch`.
