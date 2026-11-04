@@ -12,8 +12,11 @@
 - **SpringBoard & PosterBoard Rootfs Updates ([`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py)):**
   - Added `today: []` key to `IconState.plist` and `DesiredIconState.plist` to prevent SpringBoard from treating the custom icon state as corrupt and resetting to minimal default.
   - Added `posterboard(root)` enabling `RunAtLoad = True` in `/System/Library/LaunchAngels/com.apple.PosterBoard.plist` to trigger wallpaper session at boot.
-- **CI Build Status:**
-  - GitHub Actions CI Run [41797480872](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41797480872) triggered and actively compiling XNU.
+- **CI Build & Artifact Status:**
+  - GitHub Actions CI Run [41797480872](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41797480872) succeeded in `7m52s`.
+  - Kernel downloaded to [`xnu/out-0085/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0085/kernel.development.sweet) (`16 MiB`).
+  - Boot image packaged at [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) (`26 MiB`).
+  - Active `fastboot flash userdata` in progress with the fresh 15:22 rootfs.
 - **Current Device State:**
   - OnePlus 7 (`GM1901` / `guacamoleb`, Qualcomm Snapdragon 855 / SM8150, 8 GB RAM / 256 GB UFS).
   - Internal UFS `userdata` (`sda19`) holds full 11 GiB iOS 16 rootfs.
