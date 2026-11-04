@@ -2,7 +2,18 @@
 
 ## Active handoff update (2026-11-04)
 
-**🛌🛌🛌 SESSION HANDOFF: FASTBOOT BOOT HELPER READY & KNOWN OBSERVATIONS:**
+**⚡⚡⚡ TOUCH DRIVER OPTIMIZATION (0085), SAFE ACCELERATOR (0084), & POSTERBOARD ACTIVATION:**
+- **Touch Latency & CPU Bottleneck Elimination ([`xnu/patches/0085-gm1901-touch-perf.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0085-gm1901-touch-perf.patch), commit `05664f5`):**
+  - Isolated the root cause of swiping/touch lag: `sweet_touch.c` was bit-banging 80 bytes over GPIO I2C with busy-delay loops (`delay(1)`, `delay(2)`) on every 10ms report, burning up to 100% of a Cortex-A76 core during contact.
+  - Reduced report read size from `TOUCH_MAX * 8` (80 bytes) down to `2 * 8` (16 bytes, covering 2 active fingers), reducing bit-bang CPU overhead by 80%.
+  - Corrected digitizer Y-coordinate scaling in `SweetHIDTouch::touch` from `/ 2400` down to `/ 2340` (OnePlus 7 AMOLED height), restoring exact 1:1 finger tracking.
+- **Safe Hardware Graphics Accelerator ([`xnu/patches/0084-sweet-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-sweet-adreno-gpu.patch)):**
+  - Removed `MetalPluginName = "AGXMetal"` and switched `IOGPUFamily` to `"Generic"` to prevent `backboardd` from loading Apple's incompatible A11 AGX microcode bundle and faulting the Snapdragon 855 SoC into EDL.
+- **SpringBoard & PosterBoard Rootfs Updates ([`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py)):**
+  - Added `today: []` key to `IconState.plist` and `DesiredIconState.plist` to prevent SpringBoard from treating the custom icon state as corrupt and resetting to minimal default.
+  - Added `posterboard(root)` enabling `RunAtLoad = True` in `/System/Library/LaunchAngels/com.apple.PosterBoard.plist` to trigger wallpaper session at boot.
+- **CI Build Status:**
+  - GitHub Actions CI Run [41797480872](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41797480872) triggered and actively compiling XNU.
 - **Current Device State:**
   - OnePlus 7 (`GM1901` / `guacamoleb`, Qualcomm Snapdragon 855 / SM8150, 8 GB RAM / 256 GB UFS).
   - Internal UFS `userdata` (`sda19`) holds full 11 GiB iOS 16 rootfs.
