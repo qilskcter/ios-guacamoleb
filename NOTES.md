@@ -18,16 +18,13 @@
   4. *SpringBoard & PosterBoard Integration:* Rootfs contains official iOS 16 wallpapers and clean 2-page app layout with `RunAtLoad = True` on PosterBoard.
 - **Current Device State & Live Boot Execution:**
   - OnePlus 7 (`GM1901` / `guacamoleb`, Snapdragon 855, serial `85d68e24`).
-  - Successfully booted clean [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img).
-  - Hardware Photo Confirmed ([uploaded_media_1793783576767.jpg](file:///Users/nguyendinhkhanh/.gemini/antigravity-cli/brain/00ea386d-b1bc-4f63-a71a-dbe551012e64/.user_uploaded/uploaded_media_1793783576767.jpg)):
-    - XNU kernel booted cleanly.
-    - `launchd` (PID 1) completed all boot tasks: `mount-phase-1`, `data-protection`, `xpcroleaccountd`, `fips`, `keybag`, `usermanagerd`, kernel personas setup.
-    - Early boot reached `*** DONE EARLYBOOT SETUP ***`.
-    - Screen cleared to black due to `sweetfb_noconsole=1` as `backboardd` presented the first surface.
-  - Packaged [`shim/out/shim-boot-0085-debug.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085-debug.img) with `sweetfb_noconsole=0` to keep console output visible through SpringBoard launch.
+  - Successfully booted clean [`shim/out/shim-boot-0085-debug.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085-debug.img) at 16:17:16:
+    - `Sending 'boot.img' (26308 KB) OKAY [0.618s]`
+    - `Booting OKAY [0.080s]`
+    - Total time: `0.713s`.
+  - Kernel active with `sweetfb_noconsole=0`: text console remains unmuted past `*** DONE EARLYBOOT SETUP ***` to display live daemon spawns (`backboardd`, `SpringBoard`) and any possible crash / hang reasons.
 - **Next Concrete Action:**
-  - Check whether SpringBoard UI woke up after user taps screen / presses power key.
-  - If SpringBoard does not render or hangs, boot `shim-boot-0085-debug.img` to see the live console log of `backboardd` and `SpringBoard`.
+  - Ask user to observe screen text after `*** DONE EARLYBOOT SETUP ***` to identify what daemon or process is executing next.
 - **Current Device State:**
   - Successfully booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`0.715s`, status `OKAY`).
   - Device is running iOS 16 with the updated rootfs flashed at 15:32 (PosterBoard `RunAtLoad = True`, `today: []` in `IconState.plist`).
