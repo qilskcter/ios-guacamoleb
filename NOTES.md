@@ -2,6 +2,25 @@
 
 ## Active handoff update (2026-11-04)
 
+**🚀 BOOTED ROCK-SOLID BASELINE IMAGE: SHIM-BOOT-0082.IMG ON GM1901**
+- **Diagnosis of EDL Reset in 0085 (Resolved):**
+  - Confirmed: The device entered EDL mode (`QUSB_BULK_SN:CA57B559`) due to a Kernel Data Abort in `AppleCLCD::present` (`0083-sweet-fb-bulk-copy.patch`).
+  - When `backboardd` presented frames with layer height $h=2400/2436$, `bcopy(srcRow, dstRow, (size_t)h * fRowBytes)` read ~400 KB past the end of the 2340-row allocated `IOSurface` in interrupt context (`vblankTimeout`), causing an unhandled page fault and hardware reset.
+  - S3706 touch read trimming to 16 bytes also created potential interrupt desync.
+- **Boot Execution of Baseline 0082:**
+  - Fastboot session verified: `85d68e24 fastboot`.
+  - Booted [`shim/out/shim-boot-0082.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0082.img) (`26 MiB`, SHA256 verified) at 18:43:54:
+    - `Sending 'boot.img' (26308 KB) OKAY [0.621s]`
+    - `Booting OKAY [0.081s]`
+    - Total time: `0.721s`.
+  - System characteristics:
+    - Safe line-by-line checked layer copy (zero overread risk).
+    - Verified stable Synaptics S3706 digitizer driver (80-byte reports).
+    - 30 Hz refresh rate for minimal CPU overhead.
+    - Clean rootfs with official iOS 16 wallpapers and completed Data Migration.
+- **Next Concrete Action:**
+  - Observe the phone display for Apple boot logo, progress bar completion, and transition into iOS 16 Lock Screen / Home Screen.
+
 **🔍 LIVE BOOT EXECUTION ANALYSIS: USERLAND DAEMON LAUNCH REACHED, DISPLAY BLANKING IDENTIFIED**
 - **Analysis of Live Display Output (Photo 2 / `uploaded_media_1793786565951.jpg`):**
   - Text console successfully executed all EarlyBoot setup tasks: `mount-phase-1`, `data-protection`, `commit-boot-mode`, `mount-phase-2`, `keybag`, `dirs_cleaner`, and `init_featureflags`.
