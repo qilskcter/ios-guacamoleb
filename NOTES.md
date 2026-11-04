@@ -18,13 +18,17 @@
   4. *SpringBoard & PosterBoard Integration:* Rootfs contains official iOS 16 wallpapers and clean 2-page app layout with `RunAtLoad = True` on PosterBoard.
 - **Current Device State & Live Boot Execution:**
   - OnePlus 7 (`GM1901` / `guacamoleb`, Snapdragon 855, serial `85d68e24`).
-  - Successfully booted clean [`shim/out/shim-boot-0085-debug.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085-debug.img) at 16:17:16:
-    - `Sending 'boot.img' (26308 KB) OKAY [0.618s]`
-    - `Booting OKAY [0.080s]`
-    - Total time: `0.713s`.
-  - Kernel active with `sweetfb_noconsole=0`: text console remains unmuted past `*** DONE EARLYBOOT SETUP ***` to display live daemon spawns (`backboardd`, `SpringBoard`) and any possible crash / hang reasons.
+  - Successfully booted clean [`shim/out/shim-boot-0085-debug.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085-debug.img) at 16:17:16.
+  - Photo confirmed early boot reaches `*** DONE EARLYBOOT SETUP ***`.
+  - Root Cause of subsequent EDL reset isolated:
+    - In commit `05664f5`, `tools/sweet-root-tweaks.py` injected `RunAtLoad = True` into `/System/Library/LaunchAngels/com.apple.PosterBoard.plist`.
+    - `PosterBoard.app` is a SwiftUI/Metal application meant to be spawned strictly on-demand by SpringBoard via XPC, never as an unprivileged early boot daemon.
+    - When `launchd` spawns PosterBoard right after `*** DONE EARLYBOOT SETUP ***` without a running window server, PosterBoard crashes continuously in a tight respawn loop, causing CPU thrashing and triggering the PMIC watchdog hardware reset into EDL.
+  - Fixed in [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py) (commit `75460ef`): completely removed `posterboard` `RunAtLoad` injection.
 - **Next Concrete Action:**
-  - Ask user to observe screen text after `*** DONE EARLYBOOT SETUP ***` to identify what daemon or process is executing next.
+  - Exit EDL to Fastboot (hold Power + Vol+ + Vol- 10-15s, then Power + Vol-).
+  - Run `sudo ./tools/build_ios_root.sh` to produce a clean rootfs without the failing PosterBoard daemon.
+  - Flash rootfs and boot safely into SpringBoard.
 - **Current Device State:**
   - Successfully booted [`shim/out/shim-boot-0083.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0083.img) (`0.715s`, status `OKAY`).
   - Device is running iOS 16 with the updated rootfs flashed at 15:32 (PosterBoard `RunAtLoad = True`, `today: []` in `IconState.plist`).
