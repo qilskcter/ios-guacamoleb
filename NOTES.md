@@ -11,22 +11,24 @@
   3. *Touch / Swipe Inactivity:*
      - The touch driver thread terminated early (`goto out; thread_terminate`) if initial clock/power votes failed.
      - Bit-banging I2C delays were ~200 kHz, violating standard 100 kHz rise times on long panel traces.
-- **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commit `5ff2b06`):**
+- **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**
   1. *SPMI Arbiter v5 Power & Volume Keys:*
      - Mapped full 1 MiB observer window (`ml_io_map(KEYS_OBS_PA, 0x100000)`).
      - Raised APID threshold to 1024 (`count > 1024`).
      - Fixed polling for PM8150 PON peripheral (Key 0: Power active-high on bit 0).
+     - Resolved printf string escaping error in `sweet_keys.c` (commit `54e2794`).
   2. *Robust Synaptics S3706 Touch Engine:*
      - Configured reliable 100 kHz I2C open-drain timings.
      - S3706 probe retries in a persistent background loop (every 500 ms) instead of terminating on startup error.
      - 60 Hz (16 ms) touch polling once connected.
   3. *Automated Home Press & Swipe-Up Gesture (`SweetHIDButtons::testFired`):*
      - In `SweetHID.cpp`, every 5 seconds (`sweethidtest=5`), the kernel dispatches BOTH a Home button press (`kHIDUsage_Csmr_Menu`) AND an automated smooth upward swipe gesture `(540, 2200)` -> `(540, 1500)` -> `(540, 800)`.
+     - Added forward declaration `extern "C" void sweet_hid_touch(...)` before `testFired` (commit `54e2794`).
      - This automatically unlocks the Lock Screen directly to the SpringBoard Home Screen!
 - **Active GitHub Actions CI Run:**
-  - Build: [41864936410](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41864936410) triggered at 23:12:02.
+  - Build: [41877914589](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41877914589) triggered at 00:29:13.
 - **Next Concrete Action:**
-  - Wait for CI run 41864936410 to complete (~7-8 min).
+  - Monitor CI run 41877914589 to completion (~7-8 min).
   - Download kernel to `xnu/out-0088/kernel.development.sweet`.
   - Package `shim/out/shim-boot-0088.img` with `sweethidtest=5`.
   - Execute `fastboot boot shim/out/shim-boot-0088.img` and observe the transition into the Home Screen!
