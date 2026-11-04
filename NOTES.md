@@ -25,12 +25,13 @@
      - In `SweetHID.cpp`, every 5 seconds (`sweethidtest=5`), the kernel dispatches BOTH a Home button press (`kHIDUsage_Csmr_Menu`) AND an automated smooth upward swipe gesture `(540, 2200)` -> `(540, 1500)` -> `(540, 800)`.
      - Added forward declaration `extern "C" void sweet_hid_touch(...)` before `testFired` (commit `54e2794`).
      - This automatically unlocks the Lock Screen directly to the SpringBoard Home Screen!
-- **Active GitHub Actions CI Run:**
-  - Build: [41877914589](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41877914589) triggered at 00:29:13.
+- **GitHub Actions CI Verification:**
+  - Build [41877914589](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41877914589) SUCCEEDED in 5m30s! Clean patch application and clean kernel compilation.
+  - Downloaded kernel to `xnu/out-0088/kernel.development.sweet` (17.2 MB). Verified symbols: `_sweet_hid_touch`, `_sweet_keys_init`, `_touch_s3706_probe`, `SweetHIDButtons::testFired`, and `SweetAccelerator`.
+- **Packaged Boot Artifact:**
+  - Image: [`shim/out/shim-boot-0088.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0088.img) (26 MiB, SHA256: `d4ecf3299a74f950a2d2c76675a066e80a05ac471df0fea3c735d467ecd5f1aa`).
+  - Command line includes: `sweethidtest=5`, `sweetfb_noconsole=1`, `sweetkeys=1`, `sweettouch=1`, `sweetfb_hz=60`.
 - **Next Concrete Action:**
-  - Monitor CI run 41877914589 to completion (~7-8 min).
-  - Download kernel to `xnu/out-0088/kernel.development.sweet`.
-  - Package `shim/out/shim-boot-0088.img` with `sweethidtest=5`.
   - Execute `fastboot boot shim/out/shim-boot-0088.img` and observe the transition into the Home Screen!
 
 **🚀 COMPLETE ADRENO 640 GPU ACCELERATOR BUILT & PACKAGED: SHIM-BOOT-0086.IMG**
