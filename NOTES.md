@@ -2,7 +2,19 @@
 
 ## Active handoff update (2026-11-04)
 
-**⚡⚡⚡ TOUCH DRIVER OPTIMIZATION (0085), SAFE ACCELERATOR (0084), & POSTERBOARD ACTIVATION:**
+**🎉🎉🎉 0085 KERNEL (16-BYTE TOUCH + 2340 SCALE) & UPDATED ROOTFS BOOTED ON ONEPLUS 7!**
+- **Kernel & Boot Image Execution:**
+  - Patched and built XNU with [`0085-gm1901-touch-perf.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0085-gm1901-touch-perf.patch) and safe [`0084-sweet-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-sweet-adreno-gpu.patch) via GitHub Actions CI Run [41797480872](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41797480872) (`7m52s`).
+  - Downloaded to [`xnu/out-0085/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0085/kernel.development.sweet) (`16 MiB`).
+  - Packaged [`shim/out/shim-boot-0085.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0085.img) (`26 MiB`).
+  - Successfully booted via `fastboot boot shim/out/shim-boot-0085.img`:
+    - `Sending 'boot.img' (26316 KB) OKAY [0.618s]`
+    - `Booting OKAY [0.081s]`
+    - Total time: `0.711s`.
+- **System Features Active in this Boot:**
+  1. *Touch Responsiveness:* Touch report read shortened from 80 bytes to 16 bytes (5x bit-bang latency reduction) and Y-scale fixed to `/ 2340` for fluid 1:1 swiping tracking.
+  2. *Display Stability:* Safe generic `SweetAccelerator` driver active without AGXMetal mismatch panic.
+  3. *PosterBoard & Icons:* `today: []` schema included in `IconState.plist` and `PosterBoard` enabled with `RunAtLoad = True` in LaunchAngels.
 - **Touch Latency & CPU Bottleneck Elimination ([`xnu/patches/0085-gm1901-touch-perf.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0085-gm1901-touch-perf.patch), commit `05664f5`):**
   - Isolated the root cause of swiping/touch lag: `sweet_touch.c` was bit-banging 80 bytes over GPIO I2C with busy-delay loops (`delay(1)`, `delay(2)`) on every 10ms report, burning up to 100% of a Cortex-A76 core during contact.
   - Reduced report read size from `TOUCH_MAX * 8` (80 bytes) down to `2 * 8` (16 bytes, covering 2 active fingers), reducing bit-bang CPU overhead by 80%.
