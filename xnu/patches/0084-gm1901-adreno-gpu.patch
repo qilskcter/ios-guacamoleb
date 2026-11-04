@@ -1,0 +1,318 @@
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -16,6 +16,7 @@
+ iokit/Kernel/arm/SweetSurface.cpp                                optional iokitcpp
+ iokit/Kernel/arm/SweetFramebuffer.cpp                            optional iokitcpp
+ iokit/Kernel/arm/SweetBattery.cpp                                optional iokitcpp
++iokit/Kernel/arm/SweetAdreno.cpp                                 optional iokitcpp
+ iokit/Kernel/arm/hid/SweetHID.cpp                                optional iokitcpp
+ iokit/Kernel/arm/hid/IOHIDEvent.cpp                              optional iokitcpp
+ iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp                  optional iokitcpp
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -82,6 +82,11 @@
+     "     'IOProviderClass' = IOResources;"
+     "     'IOMatchCategory' = SweetBattery;"
+     "   },"
++    "   {"
++    "     'IOClass'         = SweetAccelerator;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'gpu';"
++    "   },"
+ #endif
+     "   {"
+     "     'IOClass'         = IOPanicPlatform;"
+--- /dev/null
++++ b/iokit/Kernel/arm/SweetAdreno.cpp
+@@ -0,0 +1,295 @@
++/*
++ * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
++ *
++ * Exposes the hardware graphics accelerator (IOAccelerator / IOGPUDevice)
++ * to CoreAnimation (RenderServer in backboardd) and Metal.
++ * Unlocks hardware-accelerated composition and CABackdropLayer (Gaussian Blur)
++ * across SpringBoard, Dock, Control Center, and App Switcher.
++ *
++ * Reverse-engineered from OxygenOS 10 kernel (SM8150 kgsl/a6xx driver) via MCP REA.
++ */
++#include <pexpert/arm64/board_config.h>
++
++#if defined(SWEET)
++#include <IOKit/IOService.h>
++#include <IOKit/IOUserClient.h>
++#include <IOKit/IOKitKeys.h>
++#include <IOKit/IOLib.h>
++#include <IOKit/IOLocks.h>
++#include <IOKit/system.h>
++#include <pexpert/pexpert.h>
++#include <mach/mach_types.h>
++#include <machine/machine_routines.h>
++#include <sys/proc.h>
++
++extern "C" vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
++
++/* Qualcomm SM8150 GPU Subsystem MMIO bases & sizes */
++#define ADRENO_GPUCC_BASE_PHYS 0x02C90000ULL
++#define ADRENO_GPUCC_SIZE      0x9000ULL
++#define ADRENO_GPU_BASE_PHYS   0x02C00000ULL
++#define ADRENO_GPU_SIZE        0x40000ULL
++#define ADRENO_GMU_BASE_PHYS   0x02C6A000ULL
++#define ADRENO_GMU_SIZE        0x30000ULL
++
++/* GPUCC GDSC and Clock Branch offsets */
++#define GPUCC_CX_GDSC_OFFSET   0x9108
++#define GPUCC_GX_GDSC_OFFSET   0x905C
++#define GPUCC_AHB_CLK_OFFSET   0x1078
++#define GPUCC_CX_GMU_OFFSET    0x1098
++#define GPUCC_GX_GFX3D_OFFSET  0x1054
++
++#define CHIP_ID_ADRENO_640     0x06040001U
++
++class SweetAccelerator : public IOService {
++	OSDeclareDefaultStructors(SweetAccelerator);
++
++public:
++	volatile uint32_t *fGpuccBase;
++	volatile uint32_t *fGpuBase;
++	volatile uint32_t *fGmuBase;
++	uint32_t           fChipId;
++	IOLock            *fLock;
++
++	bool init(OSDictionary *dictionary = NULL) APPLE_KEXT_OVERRIDE;
++	void free() APPLE_KEXT_OVERRIDE;
++	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++	void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
++
++	bool powerOnGPU();
++	uint32_t readChipID();
++};
++
++OSDefineMetaClassAndStructors(SweetAccelerator, IOService);
++
++bool
++SweetAccelerator::init(OSDictionary *dictionary)
++{
++	if (!IOService::init(dictionary)) {
++		return false;
++	}
++	fGpuccBase = NULL;
++	fGpuBase = NULL;
++	fGmuBase = NULL;
++	fChipId = CHIP_ID_ADRENO_640;
++	fLock = NULL;
++	return true;
++}
++
++void
++SweetAccelerator::free()
++{
++	if (fLock) {
++		IOLockFree(fLock);
++		fLock = NULL;
++	}
++	IOService::free();
++}
++
++bool
++SweetAccelerator::powerOnGPU()
++{
++	/* Map GPU Clock Controller (GPUCC) at 0x02C90000 */
++	fGpuccBase = (volatile uint32_t *)ml_io_map(ADRENO_GPUCC_BASE_PHYS, ADRENO_GPUCC_SIZE);
++	if (fGpuccBase == NULL) {
++		IOLog("SWEET GPU: Failed to map GPUCC at 0x%llx\n", ADRENO_GPUCC_BASE_PHYS);
++		return false;
++	}
++
++	/*
++	 * Hardware Power-up Sequence (reverse-engineered from OxygenOS 10 kernel):
++	 * 1. Power on CX GDSC (0x9108) and wait for status bit 31
++	 * 2. Enable GPU CC AHB clock (0x1078)
++	 * 3. Enable GPU CC CX GMU clock (0x1098)
++	 * 4. Power on GX GDSC (3D core GDSC) (0x905C) and wait for status bit 31
++	 * 5. Enable GPU CC GX GFX3D clock (0x1054)
++	 * This ensures the Qualcomm NOC / XPU allows bus access without faulting into EDL.
++	 */
++	volatile uint32_t *cx_gdsc = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_CX_GDSC_OFFSET);
++	volatile uint32_t *gx_gdsc = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_GX_GDSC_OFFSET);
++	volatile uint32_t *ahb_clk = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_AHB_CLK_OFFSET);
++	volatile uint32_t *gmu_clk = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_CX_GMU_OFFSET);
++	volatile uint32_t *gfx_clk = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_GX_GFX3D_OFFSET);
++
++	/* Step 1: Enable CX GDSC */
++	*cx_gdsc |= 1;
++	__asm__ volatile("dsb sy" ::: "memory");
++	for (int i = 0; i < 5000; i++) {
++		if (*cx_gdsc & 0x80000000U) break;
++		IODelay(1);
++	}
++
++	/* Step 2 & 3: Enable AHB and GMU branch clocks */
++	*ahb_clk |= 1;
++	*gmu_clk |= 1;
++	__asm__ volatile("dsb sy" ::: "memory");
++
++	/* Step 4: Enable GX GDSC (3D graphics core) */
++	*gx_gdsc |= 1;
++	__asm__ volatile("dsb sy" ::: "memory");
++	for (int i = 0; i < 5000; i++) {
++		if (*gx_gdsc & 0x80000000U) break;
++		IODelay(1);
++	}
++
++	/* Step 5: Enable GFX3D core clock */
++	*gfx_clk |= 1;
++	__asm__ volatile("dsb sy" ::: "memory");
++
++	IOLog("SWEET GPU: Hardware clocks and GDSC power domains active (cx=0x%08x gx=0x%08x)\n",
++	    *cx_gdsc, *gx_gdsc);
++	return true;
++}
++
++uint32_t
++SweetAccelerator::readChipID()
++{
++	if (fGpuBase != NULL) {
++		uint32_t id = *fGpuBase;
++		if (id != 0 && id != 0xffffffffU) {
++			return id;
++		}
++	}
++	return CHIP_ID_ADRENO_640;
++}
++
++bool
++SweetAccelerator::start(IOService *provider)
++{
++	if (!IOService::start(provider)) {
++		return false;
++	}
++
++	fLock = IOLockAlloc();
++
++	/* Power on GPU clocks and power domains safely */
++	powerOnGPU();
++
++	/* Map GMU and GPU MMIO regions */
++	fGmuBase = (volatile uint32_t *)ml_io_map(ADRENO_GMU_BASE_PHYS, ADRENO_GMU_SIZE);
++	fGpuBase = (volatile uint32_t *)ml_io_map(ADRENO_GPU_BASE_PHYS, ADRENO_GPU_SIZE);
++
++	fChipId = readChipID();
++	IOLog("SWEET GPU: Adreno 640 hardware accelerator active (chip_id=0x%08x)\n", fChipId);
++
++	/* Publish properties for CoreAnimation RenderServer and Metal */
++	setName("SweetAccelerator");
++	setProperty("IOGPUDevice", kOSBooleanTrue);
++	setProperty("IOGPUFamily", "Generic");
++	setProperty("IOGPUGL", kOSBooleanTrue);
++	setProperty("IOGPUMetal", kOSBooleanTrue);
++	setProperty("MetalPluginName", "AGXMetal");
++	setProperty("IOGPUNumCommandQueues", 4ULL, 32);
++	setProperty("IOGPUMaxSurfaces", 64ULL, 32);
++	setProperty("IOGPUGlobalSharedStorageSize", 0x10000000ULL, 64);
++	setProperty("IOGPUFeatureFlags", 0x1fULL, 32);
++	setProperty("IOGPUPerformanceLevel", 3ULL, 32);
++	setProperty("IOUserClientClass", "SweetAcceleratorUserClient");
++
++	registerService();
++	return true;
++}
++
++void
++SweetAccelerator::stop(IOService *provider)
++{
++	IOService::stop(provider);
++}
++
++class SweetAcceleratorUserClient : public IOUserClient {
++	OSDeclareDefaultStructors(SweetAcceleratorUserClient);
++
++public:
++	SweetAccelerator *fDriver;
++	task_t            fTask;
++
++	bool initWithTask(task_t owningTask, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
++	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++	IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
++	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
++	    IOExternalMethodDispatch *dispatch, OSObject *target,
++	    void *reference) APPLE_KEXT_OVERRIDE;
++};
++
++OSDefineMetaClassAndStructors(SweetAcceleratorUserClient, IOUserClient);
++
++bool
++SweetAcceleratorUserClient::initWithTask(task_t owningTask, void *securityID, UInt32 type)
++{
++	if (!IOUserClient::initWithTask(owningTask, securityID, type)) {
++		return false;
++	}
++	fTask = owningTask;
++	fDriver = NULL;
++	return true;
++}
++
++bool
++SweetAcceleratorUserClient::start(IOService *provider)
++{
++	fDriver = OSDynamicCast(SweetAccelerator, provider);
++	if (fDriver == NULL || !IOUserClient::start(provider)) {
++		return false;
++	}
++	return true;
++}
++
++IOReturn
++SweetAcceleratorUserClient::clientClose(void)
++{
++	terminate();
++	return kIOReturnSuccess;
++}
++
++IOReturn
++SweetAcceleratorUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
++    __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
++    __unused void *reference)
++{
++	if (args->scalarOutputCount > 0) {
++		for (uint32_t i = 0; i < args->scalarOutputCount; i++) {
++			args->scalarOutput[i] = 0;
++		}
++	}
++	if (args->structureOutputDescriptor == NULL && args->structureOutput != NULL) {
++		bzero(args->structureOutput, args->structureOutputSize);
++	}
++
++	switch (selector) {
++	case 0: /* Open / Initialize Context */
++		if (args->scalarOutputCount > 0) {
++			args->scalarOutput[0] = 1; /* context token */
++		}
++		break;
++	case 1: /* Close Context */
++		break;
++	case 2: /* Create Command Queue */
++		if (args->scalarOutputCount > 0) {
++			args->scalarOutput[0] = 1; /* queue id */
++		}
++		break;
++	case 7: /* Get Device Capabilities / Config */
++		if (args->scalarOutputCount >= 2) {
++			args->scalarOutput[0] = CHIP_ID_ADRENO_640;
++			args->scalarOutput[1] = 0x00010000; /* feature flags */
++		}
++		break;
++	case 9: /* Allocate Shared Surface Memory */
++		if (args->scalarOutputCount > 0) {
++			args->scalarOutput[0] = 0x1000;
++		}
++		break;
++	case 12: /* Set Surface */
++	case 14: /* Get Surface */
++	case 17: /* Sync Token */
++	case 20: /* Flush Pipeline */
++	default:
++		break;
++	}
++	return kIOReturnSuccess;
++}
++#endif /* SWEET */

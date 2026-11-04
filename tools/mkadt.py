@@ -185,6 +185,12 @@ def build(seed=None, qemu=False, highmem=False):
             ('compatible', cstr('sweet,display')),
             ('canvas-width', u32(1125)),
             ('canvas-height', u32(2436)),
+        ]),
+        node('gpu', [
+            ph(),
+            ('device_type', cstr('gpu-subsystem')),
+            ('compatible', cstr('qcom,adreno-640') + cstr('qcom,adreno') + cstr('apple,ioaccelerator')),
+            ('reg', u64(0x02c00000, 0x40000, 0x02c6a000, 0x30000, 0x02c90000, 0x9000)),
         ])])
 
     fbcon = node('sweet-fbcon', [
