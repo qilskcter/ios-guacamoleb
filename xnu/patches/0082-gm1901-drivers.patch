@@ -541,7 +541,7 @@
  static void
  touch_report(uint32_t mask, const int *x, const int *y)
  {
-@@ -383,106 +426,116 @@
+@@ -383,106 +426,118 @@
  	st.active = mask;
  }
  
@@ -692,7 +692,9 @@
 -	unsigned n = buf[2] & 15u, active = 0;
 -	if ((buf[0] & 0x70u) || n > TOUCH_MAX) {
 -		return EIO;
++	(void)touch_write_reg(S3706_I2C_ADDR, 0xff, 0x04);
 +	err = touch_read(S3706_I2C_ADDR, st.f12_data, false, buf, sizeof(buf));
++	(void)touch_write_reg(S3706_I2C_ADDR, 0xff, 0x00);
 +	if (err) {
 +		return err;
  	}
