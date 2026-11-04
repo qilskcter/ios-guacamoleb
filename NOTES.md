@@ -2,18 +2,19 @@
 
 ## Active handoff update (2026-11-04)
 
-**🚀 SHIM-BOOT-0089: CLEAN BOOT IMAGE WITHOUT SIMULATED GESTURES (SWEETHIDTEST=0)**
-- **User Request & Diagnosis:**
-  - In `shim-boot-0088.img`, `sweethidtest=5` injected continuous swipe gestures `(540, 2200) -> (540, 800)` every 5s, causing phantom touch inputs and making the UI enter the home screen repeatedly without stability.
-  - User requested disabling this erratic behavior immediately and restoring rock-solid stability like `0082`.
-- **Immediate Fix Implemented Locally:**
-  - Packaged [`shim/out/payload-0089.bin`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/payload-0089.bin) with `sweethidtest=0`.
-  - Timer in `SweetHID.cpp` is completely disabled (`fTestSecs = 0`, never instantiated). Zero phantom gestures or simulated touches.
-  - Retains full Adreno 640 GPU hardware acceleration, bounds-checked framebuffer present, 60 Hz display, clean UI (`sweetfb_noconsole=1`), SPMI Power/Volume keys, and native physical Synaptics S3706 touch engine.
-- **Packaged Boot Artifact:**
-  - Image: [`shim/out/shim-boot-0089.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0089.img) (26 MiB, SHA256: `84bc181dbd96ea2eac9c7cee3454db99d950aecb6b37e065873d1640621ab862`).
-- **Next Concrete Action:**
-  - User boots device into Fastboot Mode (hold Power + Vol Down) and boots `shim/out/shim-boot-0089.img`.
+**🚀 SHIM-BOOT-0089: CLEAN BOOT IMAGE & USER HANDOFF (2026-11-05)**
+- **Diagnosis of Live Boot 0089 Execution (User Verification):**
+  1. *Touch Input Unresponsive:* Physical touch on AMOLED panel does not respond ("không sử dụng được cảm ứng"). Synaptics S3706 I2C/RMI4 F12 sensor reading in `bsd/dev/sweet_touch.c` requires exact register map / page selection alignment with OnePlus 7 kernel driver (`synaptics_driver_s3706.o`).
+  2. *Power Key Display Fade Inactive:* Pressing Power button does not turn off the display ("bấm nút nguồn cũng k tắt hẳn"). Root cause identified: in `xnu/patches/0079-sweet-display-power.patch`, `kSweetFBRequestPowerChange` hardcoded `bool off = false;`, ignoring `backboardd` power-off requests.
+  3. *Stability Baseline Reference:* User requested restoring the rock-solid baseline feel of `0082` ("nó k ổn định các chức năng như 0082").
+  4. *Session Paused for the Night:* User requested pausing until tomorrow morning ("có gì mai fix cho tôi, sáng mai fix cho tôi").
+- **Concrete Next Actions for Morning Session:**
+  1. *Fix Display Power Toggle (`0079-sweet-display-power.patch`):*
+     - Restore `bool off = args->scalarInput[0] == 0;` so pressing Power fades the AMOLED display to black, and pressing Power again restores frame presentation.
+  2. *Fix Synaptics S3706 Physical Digitizer (`0082-gm1901-drivers.patch` / `sweet_touch.c`):*
+     - Verify S3706 I2C address (`0x20` vs `0x48`), interrupt pin GPIO 122 polarity (active low), and F12 2D register offsets against vendor `synaptics_driver_s3706.o`.
+     - Ensure clean 80-byte / 16-byte report structures match userland `AppleMultitouchServices` expectations without synthetic test touches.
+  3. *Build `shim-boot-0090.img` via CI, package payload, and boot on GM1901.*
 - **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**
   1. *SPMI Arbiter v5 Power & Volume Keys:*
      - Mapped full 1 MiB observer window (`ml_io_map(KEYS_OBS_PA, 0x100000)`).
