@@ -189,7 +189,7 @@ def build(seed=None, qemu=False, highmem=False):
         node('gpu', [
             ph(),
             ('device_type', cstr('gpu-subsystem')),
-            ('compatible', cstr('qcom,adreno-640') + cstr('qcom,adreno') + cstr('apple,ioaccelerator')),
+            ('compatible', cstr('qcom,adreno-640') + cstr('qcom,adreno') + cstr('apple,ioaccelerator') + cstr('agx-a11') + cstr('apple,agx')),
             ('reg', u64(0x02c00000, 0x40000, 0x02c6a000, 0x30000, 0x02c90000, 0x9000)),
         ])])
 

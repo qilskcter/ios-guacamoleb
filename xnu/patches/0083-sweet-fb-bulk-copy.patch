@@ -99,7 +99,7 @@
  void
  AppleCLCD::present(const uint8_t *rec)
  {
-@@ -391,10 +447,43 @@
+@@ -391,10 +447,46 @@
  			src = 0;
  		}
  		if (src != 0 && bpe == 4) {
@@ -121,7 +121,7 @@
 +					dstRow += fRowBytes;
 +				}
 +			} else {
-+				/* Layer > 0 (Backdrop blur, UI overlays, Icons): alpha-blend into framebuffer */
++				/* Layer > 0 (Backdrop blur, UI overlays, Icons): fast fixed-point alpha-blend into framebuffer */
 +				uint32_t copy_w = ((uint32_t)(dx + w) > fWidth) ? (fWidth > (uint32_t)dx ? fWidth - (uint32_t)dx : 0) : (uint32_t)w;
 +				for (uint32_t y = 0; y < copy_h; y++) {
 +					const uint32_t *sp = (const uint32_t *)srcRow;
@@ -134,10 +134,13 @@
 +						} else if (a > 0) {
 +							uint32_t dst_px = dp[x];
 +							uint32_t inv_a = 255 - a;
-+							uint32_t r = (((src_px >> 16) & 0xff) * a + ((dst_px >> 16) & 0xff) * inv_a) / 255;
-+							uint32_t g = (((src_px >> 8) & 0xff) * a + ((dst_px >> 8) & 0xff) * inv_a) / 255;
-+							uint32_t b = ((src_px & 0xff) * a + (dst_px & 0xff) * inv_a) / 255;
-+							dp[x] = (255 << 24) | (r << 16) | (g << 8) | b;
++							uint32_t rb_s = src_px & 0x00ff00ff;
++							uint32_t g_s  = (src_px >> 8) & 0x000000ff;
++							uint32_t rb_d = dst_px & 0x00ff00ff;
++							uint32_t g_d  = (dst_px >> 8) & 0x000000ff;
++							uint32_t rb = (((rb_s * a + rb_d * inv_a) + 0x00800080) >> 8) & 0x00ff00ff;
++							uint32_t g  = (((g_s * a + g_d * inv_a) + 0x00000080) >> 8) & 0x000000ff;
++							dp[x] = 0xff000000 | rb | (g << 8);
 +						}
 +					}
 +					srcRow += s->bytesPerRow;
