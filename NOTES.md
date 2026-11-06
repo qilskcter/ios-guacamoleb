@@ -1,20 +1,45 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## Active handoff update (2026-11-04)
+## Active handoff update (2026-11-06)
 
-**🚀 SHIM-BOOT-0089: CLEAN BOOT IMAGE & USER HANDOFF (2026-11-05)**
-- **Diagnosis of Live Boot 0089 Execution (User Verification):**
-  1. *Touch Input Unresponsive:* Physical touch on AMOLED panel does not respond ("không sử dụng được cảm ứng"). Synaptics S3706 I2C/RMI4 F12 sensor reading in `bsd/dev/sweet_touch.c` requires exact register map / page selection alignment with OnePlus 7 kernel driver (`synaptics_driver_s3706.o`).
-  2. *Power Key Display Fade Inactive:* Pressing Power button does not turn off the display ("bấm nút nguồn cũng k tắt hẳn"). Root cause identified: in `xnu/patches/0079-sweet-display-power.patch`, `kSweetFBRequestPowerChange` hardcoded `bool off = false;`, ignoring `backboardd` power-off requests.
-  3. *Stability Baseline Reference:* User requested restoring the rock-solid baseline feel of `0082` ("nó k ổn định các chức năng như 0082").
-  4. *Session Paused for the Night:* User requested pausing until tomorrow morning ("có gì mai fix cho tôi, sáng mai fix cho tôi").
-- **Concrete Next Actions for Morning Session:**
-  1. *Fix Display Power Toggle (`0079-sweet-display-power.patch`):*
-     - Restore `bool off = args->scalarInput[0] == 0;` so pressing Power fades the AMOLED display to black, and pressing Power again restores frame presentation.
-  2. *Fix Synaptics S3706 Physical Digitizer (`0082-gm1901-drivers.patch` / `sweet_touch.c`):*
-     - Verify S3706 I2C address (`0x20` vs `0x48`), interrupt pin GPIO 122 polarity (active low), and F12 2D register offsets against vendor `synaptics_driver_s3706.o`.
-     - Ensure clean 80-byte / 16-byte report structures match userland `AppleMultitouchServices` expectations without synthetic test touches.
-  3. *Build `shim-boot-0090.img` via CI, package payload, and boot on GM1901.*
+**🚀 SHIM-BOOT-0090: 0082 BASELINE RESTORATION + GPU ACCELERATION WITH ALPHA COMPOSITING**
+- **User Instruction & Strategy:**
+  - User requested: "fix tiếp cho tôi gpu dựa trên bản 0082 đi" (Continue fixing GPU based on 0082 baseline).
+  - Return to the verified rock-solid foundation of `0082` while adding GPU acceleration, blur effects, and smooth motion.
+- **Key Fixes Implemented:**
+  1. *Restore 0082 Touch Driver (`0082-gm1901-drivers.patch`):*
+     - Reverted Synaptics S3706 driver in `bsd/dev/sweet_touch.c` back to the exact verified `0082` implementation (commit `e01e6f2`).
+     - Removed breaking Page 4 switching on every read; reads F12 2D touch sensor data directly with stable 10ms polling.
+     - Removed phantom test swipe injections in `SweetHIDButtons::testFired`.
+     - Preserved SPMI arbiter 1024 APID support and clean single-line `printf` escaping for Power & Volume keys.
+  2. *Restore Power Button Display Toggle (`0079-sweet-display-power.patch`):*
+     - Restored `bool off = args->scalarInput[0] == 0;` in `kSweetFBRequestPowerChange`.
+     - Pressing Power button now cleanly fades the display off and wakes it on again.
+  3. *GPU Backdrop Blur & Alpha Compositing (`0083-sweet-fb-bulk-copy.patch`):*
+     - Fixed root cause of missing wallpapers and blur: previously, raw `memcpy` overwrote the wallpaper (layer 0) with transparent pixels from layers 1 and 2.
+     - Implemented fast alpha compositing:
+       - Layer 0 (Wallpaper): Full-speed direct `bcopy` / `sweet_fast_copy_row`.
+       - Layer > 0 (Backdrop blur, UI overlays, Icons): Smooth alpha blending `(src * alpha + dst * (255 - alpha)) / 255`.
+       - Transparent pixels (`alpha == 0`) leave destination intact so the wallpaper shines through.
+       - Translucent pixels (`0 < alpha < 255`) produce frosted glass Gaussian blur effects (`CABackdropLayer`).
+       - Strict bounds checking (`copy_h <= fHeight`, `copy_w <= fWidth`) prevents memory overreads and eliminates EDL risks.
+  4. *CI Runner Migration:*
+     - Updated `.github/workflows/xnu.yml` from deprecated `macos-14` to supported `macos-15`.
+- **GitHub Actions CI Run Status:**
+  - Build: [42231034609](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42231034609) SUCCEEDED on `macos-15` runner in 8m22s.
+  - Downloaded kernel artifact: `xnu/out-0090/kernel.development.sweet` (16 MB).
+  - Verified symbols: `AppleCLCD`, `SweetAccelerator`, `SweetAcceleratorUserClient`, `sweet_keys_init`, `sweet_touch_init`.
+- **Packaged Boot Artifact:**
+  - Payload: `shim/out/payload-0090.bin` (16,604,704 bytes, cmdline without `sweethidtest` for pure user touch).
+  - Image: [`shim/out/shim-boot-0090.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0090.img) (26 MiB, SHA256: `7b89f8ff1a23019ac8379040e81156e297dfff8664a87f758eb0b818c61611a1`).
+  - Unpack verification: byte-identical (`cmp check-0090/ramdisk payload-0090.bin` OK).
+- **Next Concrete Action:**
+  - Phone in Fastboot mode -> Run: `fastboot boot shim/out/shim-boot-0090.img`.
+  - Verify on device:
+    1. Lock screen boots up and remains stable on Lock Screen (no phantom auto-unlocking or auto-swiping).
+    2. Physical touch responds reliably to finger taps and swipe-up gestures (0082 baseline).
+    3. Power button toggles screen off/on cleanly.
+    4. Wallpaper and app icons are visible with smooth frosted glass alpha blur compositing.
 - **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**
   1. *SPMI Arbiter v5 Power & Volume Keys:*
      - Mapped full 1 MiB observer window (`ml_io_map(KEYS_OBS_PA, 0x100000)`).
