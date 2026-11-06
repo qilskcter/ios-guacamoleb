@@ -22,9 +22,10 @@
      - Eliminates all integer divisions, cutting per-frame compositing latency from ~80ms to <1.5ms, guaranteeing rock-solid 60 FPS.
   3. *Apple DeviceTree (`tools/mkadt.py` & `shim/out/gm1901.adt`):*
      - Added `agx-a11` and `apple,agx` to `compatible` list under `/arm-io/gpu`.
-- **Next Concrete Action:**
-  - Commit and push changes to trigger GitHub Actions build for kernel `0091`.
-  - Download kernel, package `shim-boot-0091.img`, and flash/boot on device.
+- **CI Build & Fix Tracking:**
+  - Build [42241805365](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42241805365) completed in 8m25s but skipped `0084-gm1901-adreno-gpu.patch` due to `corrupt patch at line 27` (escaped quote `\"372` in hunk header).
+  - Fixed hunk header at line 27 to `@@ -0,0 +1,372 @@`.
+  - Pushed commit to build `0091` with full `AGXAccelerator` and `IOAccelerator` compiled into kernel.
     3. Power button toggles screen off/on cleanly.
     4. Wallpaper and app icons are visible with smooth frosted glass alpha blur compositing.
 - **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**
