@@ -62,7 +62,7 @@
  		break;
 +	case kSweetFBRequestPowerChange:
 +		if (args->scalarInputCount >= 1) {
-+			bool off = false; /* Keep display permanently active on GM1901 */
++			bool off = args->scalarInput[0] == 0;
 +			IOLockLock(fFB->fLock);
 +			if (off != fFB->fPowerOff) {
 +				fFB->fPowerOff = off;
@@ -70,7 +70,7 @@
 +				fFB->fDirty = true;     /* on: redraw the latest frame */
 +			}
 +			IOLockUnlock(fFB->fLock);
-+			IOLog("SWEET FB: display on (permanent)\n");
++			IOLog("SWEET FB: display %s\n", off ? "off" : "on");
 +		}
 +		break;
  	case kSweetFBSwapWait:
