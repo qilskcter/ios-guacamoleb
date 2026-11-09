@@ -23,9 +23,10 @@
   3. *Apple DeviceTree (`tools/mkadt.py` & `shim/out/gm1901.adt`):*
      - Added `agx-a11` and `apple,agx` to `compatible` list under `/arm-io/gpu`.
 - **CI Build & Fix Tracking:**
-  - Build [42241805365](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42241805365) completed in 8m25s but skipped `0084-gm1901-adreno-gpu.patch` due to `corrupt patch at line 27` (escaped quote `\"372` in hunk header).
-  - Fixed hunk header at line 27 to `@@ -0,0 +1,372 @@`.
-  - Pushed commit to build `0091` with full `AGXAccelerator` and `IOAccelerator` compiled into kernel.
+  - Build [42241805365](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42241805365) failed because `0084` was skipped due to a typo in the hunk header (escaped quote `\"372`).
+  - Build [42246479930](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42246479930) failed because `0083` was skipped due to hunk line count mismatch (`-391,10 +447,46` instead of `-391,9 +447,45`).
+  - Fixed hunk header at line 102 in `0083-sweet-fb-bulk-copy.patch`. Both 0083 and 0084 verified format-valid with `git apply --check` and `tools/validate-repo.py`.
+  - Pushed commit to build `0091` with both fast fixed-point alpha compositing and full `AGXAccelerator`/`IOAccelerator` compiled into the kernel.
     3. Power button toggles screen off/on cleanly.
     4. Wallpaper and app icons are visible with smooth frosted glass alpha blur compositing.
 - **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**

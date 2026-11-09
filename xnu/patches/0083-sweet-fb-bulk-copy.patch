@@ -99,7 +99,7 @@
  void
  AppleCLCD::present(const uint8_t *rec)
  {
-@@ -391,10 +447,46 @@
+@@ -391,9 +447,45 @@
  			src = 0;
  		}
  		if (src != 0 && bpe == 4) {
