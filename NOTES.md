@@ -2,6 +2,25 @@
 
 ## Active handoff update (2026-11-10)
 
+**🚀 SHIM-BOOT-0094 BUILT, PACKAGED & LIVE BOOTED: PERMANENT DOCK BLUR FIX + SM8150 CPU/L3 OSM MAX CLOCK BOOST + UFS CACHE/WAIT**
+- **Root Cause 1 (Why Home Screen Dock Blur Disappeared After Initial Frames on `0093`):**
+  1. Disassembly of `QuartzCore` (`CA::OGL::capture_backdrop` at `0x188315a6c`..`0x188315b90` and `SWContext::function_supported` at `0x188440a20`) revealed that when `CABackdropLayer.scale < 0.5` (the Home Screen Dock settles at `scale = 0.25`), `capture_backdrop` sets `Gstate->image_func = 26` (`0x1a`, `downsample_blur_2`) or `28` (`0x1c`, `downsample_blur_4`).
+  2. `SWContext::function_supported()` checks `Gstate->image_func` against bitmask `0x002fe0000109ffeb`, where bit `1` (bilinear filter, used when `scale >= 0.5`) is `1`, but bits `26` and `28` are `0`!
+  3. Consequently, during the initial transition (`scale >= 0.5`), `SWContext` drew the backdrop into `BackdropBuffer` and blurred it; once the Dock settled at `scale = 0.25`, `SW::draw_polygon` rejected `image_func = 26` and skipped drawing into `BackdropBuffer`, leaving it empty so `filter_backdrop` blurred transparent pixels and the Dock blur vanished.
+  4. **Fix (`sweet_fixup_quartzcore` in [`0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch) & [`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):** On `backboardd`'s first `kSweetFBSwapBegin`, `sweet_fixup_quartzcore(fTask)` locates `0x188315a74 + slide` in `backboardd`'s shared region and patches `0x540004aa` (`b.ge 0x188315b08`) to `0x14000025` (`b 0x188315b08`) with full D-cache clean (`dc civac`) and Inner Shareable I-cache invalidation (`ic ialluis`), forcing `capture_backdrop` to always use `image_func = 1` (bilinear downsample) before `filter_backdrop` runs Gaussian blur + saturation.
+- **Root Cause 2 (Why Rendering & UI Responsiveness Felt Unaccelerated on `0093`):**
+  1. Snapdragon 855 Kryo 485 cores and L3 cache were running at conservative ABL boot frequencies, VSync timer re-arming in `AppleCLCD::vsyncFired` happened *after* `fb->present(rec)` (causing VSync period drift), and `ufscache=1 ufswait=1` were not enabled on the kernel command line.
+  2. **Fixes (Commits `7a669d6` and `699ebec`):**
+     - Implemented `SweetAccelerator::boostCPUClocks()` in [`xnu/patches/0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch): maps SM8150 `qcom,clk-cpu-osm` (`0x18320000`, size `0xc000`), scans the 40 hardware LUT rows (`+0x110 + i * 0x20`) for each domain (`L3` at `+0x1000`, `Silver` at `+0x3000`, `Gold` at `+0x5800`, `Prime` at `+0x7800`) to find the highest valid OPP index, and writes it to `OSM_REG_PERF_DESIRED` (`+0x920`) without touching read-only LUT registers.
+     - Re-armed `sender->setTimeoutUS(SWEET_FB_VSYNC_US)` before `fb->present(rec)` in [`xnu/patches/0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch) to eliminate 60 Hz VSync jitter.
+     - Added `ufscache=1 ufswait=1` to `--cmdline` when packaging `payload-0094.bin`.
+- **CI Build & Packaged Boot Artifact:**
+  - GitHub Actions Run [42850297105](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42850297105) (commit `699ebec`) SUCCEEDED in 9m27s.
+  - Downloaded kernel to [`xnu/out-0094/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0094/kernel.development.sweet) (verified `_sweet_fixup_quartzcore` at `0xfffffe0007a673a0` and `__ZN16SweetAccelerator14boostCPUClocksEv` at `0xfffffe0007a67730`).
+  - Image: [`shim/out/shim-boot-0094.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0094.img) (26 MiB, `--highmem` ADT `phys_base = 0x100000000`).
+  - SHA256: `306ad7d81df4e8ab24a10c94403a379f33c3cfb924556158ffd04c2e6c5117c4`.
+  - Live booted on `85d68e24` via `fastboot boot shim/out/shim-boot-0094.img` (`Sending 'boot.img' (26296 KB) OKAY [0.621s]`, `Booting OKAY [0.081s]`, `Total time: 0.719s`).
+
 **🚀 SHIM-BOOT-0093 READY & LIVE BOOTED: TWO CRITICAL ROOT CAUSES RESOLVED (HIGHMEM ADT + 0083 PATCH APPLIED IN CI)**
 - **Root Cause 1 (Why `0091` and `0092` went black / Sahara Crashdump after `UMD_INIT` while `0090` booted fine):**
   1. Binary comparison of `shim/out/payload-0090.bin` vs `shim/out/payload-0091.bin` and `shim/out/payload-0092.bin` revealed that `payload-0090.bin` had `gm1901.adt` generated WITH `--highmem` (`phys_base = 0x100000000`, `mem_size = 0xfcc00000` / ~4 GiB high RAM), whereas `0091` and `0092` were packaged with lowmem `gm1901.adt` (`phys_base = 0xb0000000`, `mem_size = 0x4d000000`).
