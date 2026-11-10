@@ -320,24 +320,24 @@
 +touch_i2c_start(void)
 +{
 +	touch_i2c_sda_hi();
-+	delay(2);
++	delay(1);
 +	(void)touch_i2c_scl_hi();
-+	delay(2);
++	delay(1);
 +	touch_i2c_sda_lo();
-+	delay(2);
++	delay(1);
 +	touch_i2c_scl_lo();
-+	delay(2);
++	delay(1);
 +}
 +
 +static void
 +touch_i2c_stop(void)
 +{
 +	touch_i2c_sda_lo();
-+	delay(2);
++	delay(1);
 +	(void)touch_i2c_scl_hi();
-+	delay(2);
++	delay(1);
 +	touch_i2c_sda_hi();
-+	delay(2);
++	delay(1);
 +}
 +
 +static bool
@@ -365,7 +365,7 @@
 -		if (count > 64 || count > (nr - st.got + 3u) / 4u) {
 -			err = EIO;
 -			break;
-+		delay(2);
++		delay(1);
 +		touch_i2c_scl_lo();
 +		delay(1);
 +	}
@@ -375,7 +375,7 @@
 +		return false;
 +	}
 +	bool ack = !(touch_rd(st.gpio, TOUCH_GPIO_IO(st.sda_pin)) & 1u);
-+	delay(2);
++	delay(1);
 +	touch_i2c_scl_lo();
 +	delay(1);
 +	return ack;
@@ -431,7 +431,7 @@
 +		touch_i2c_sda_hi();
 +		return false;
 +	}
-+	delay(2);
++	delay(1);
 +	touch_i2c_scl_lo();
 +	touch_i2c_sda_hi();
 +	delay(1);
@@ -676,7 +676,7 @@
  {
 -	uint8_t buf[63];
 +	uint8_t irq_sts = 0;
-+	uint8_t buf[TOUCH_MAX * 8u];
++	uint8_t buf[2u * 8u];
  	int x[TOUCH_MAX] = {0}, y[TOUCH_MAX] = {0};
 -	uint32_t mask = 0, seen = 0;
 -	int err = touch_read(0x38, 0, false, buf, sizeof(buf));
@@ -694,11 +694,12 @@
 +	if (err) {
 +		return err;
  	}
- 	for (unsigned i = 0; i < TOUCH_MAX; ++i) {
+-	for (unsigned i = 0; i < TOUCH_MAX; ++i) {
 -		const uint8_t *p = buf + 3u + 6u * i;
 -		unsigned id = p[2] >> 4, event = p[0] >> 6;
 -		if (id >= TOUCH_MAX) {
 -			break; /* vendor's unused-record sentinel */
++	for (unsigned i = 0; i < 2u; ++i) {
 +		const uint8_t *p = buf + i * 8u;
 +		uint8_t type = p[0] & 0x0fu;
 +		if (type == 1u || type == 2u) {
@@ -880,7 +881,7 @@
  	while (!st.dead) {
  		/* Optional IRQ hint still reads every 100ms, and always while down. */
 -		if (!st.irq_hint || st.active || !(touch_rd(st.gpio, TOUCH_GPIO_IO(9)) & 1u) ||
-+		if (!st.irq_hint || st.active || !(touch_rd(st.gpio, TOUCH_GPIO_IO(122)) & 1u) ||
++		if (!st.irq_hint || !(touch_rd(st.gpio, TOUCH_GPIO_IO(122)) & 1u) || (st.active && (ticks % 4u) == 0) ||
  		    (++ticks % 10u) == 0) {
 -			int err = st.kind == TOUCH_GOODIX ? touch_goodix() : touch_focaltech();
 +			int err = touch_s3706();

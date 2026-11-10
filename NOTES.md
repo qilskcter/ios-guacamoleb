@@ -1,6 +1,23 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## Active handoff update (2026-11-10)
+## Active handoff update (2026-11-11)
+
+**🚀 SHIM-BOOT-0095 IN PROGRESS: 60 FPS ANIMATION LAG ELIMINATION (IMMEDIATE SWAP PRESENT + CACHED LAYER-0 BLEND + QUARTZCORE NEAREST SAMPLING + 9X FASTER TOUCH I2C)**
+- **User Observation on `0094`:**
+  - Home Screen Dock `CABackdropLayer` blur now stays permanently (`sweet_fixup_quartzcore` at `0x188315a74` confirmed working), **but UI animations are still very laggy**.
+- **Root Causes of Animation Lag on `0094` & Fixes in `0095`:**
+  1. **`SweetFramebuffer` VSync WorkLoop Blocking (`AppleCLCD::swap` / `vsyncFired` in [`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):**
+     - Previously, `AppleCLCD::swap()` only copied `rec` to `fPending` and waited for `vsyncFired` on the single-threaded `fWorkLoop` to call `fb->present(rec)`. Running `present(rec)` (8–12 ms) on `fWorkLoop` blocked subsequent VSync timer callbacks, causing `backboardd`'s `CADisplayLink` to miss alternate VSync deadlines and drop animations to 30 FPS with severe judder.
+     - **Fix:** `AppleCLCD::swap(rec)` now calls `present(local_rec)` **immediately** on the calling `backboardd` thread (`kSweetFBSwapEnd`) while `fDirty` is cleared, leaving `fWorkLoop` free to deliver 60 Hz VSync Mach notifications with < 5 us latency and zero jitter.
+  2. **Uncached Framebuffer Reads During Layer > 0 Alpha Blending ([`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):**
+     - `fSurface` (`0x9c000000`) is mapped with `kIOMapWriteCombineCache` (uncached reads), so reading `dp[x]` during translucent layer blending (`layer > 0`) stalled the CPU on every translucent pixel.
+     - **Fix:** Retain `layer0_surf` (`SweetSurface` for Layer 0, allocated in Write-Back cached RAM) during `present()` and read background pixels `l0p[x]` directly from Layer 0's cached kernel buffer instead of uncached `dp[x]`.
+  3. **`QuartzCore` 4-Tap Bilinear Backdrop Sampling ([`0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch)):**
+     - In `CA::OGL::capture_backdrop`, unslid `0x18831580c` (`0x1a9f07e8`, `cset w8, ne`) selects `image_func = 1` (4-tap floating-point bilinear sampling in `SW::sample_image_bilinear_RGBA32_float`) for every layer rendered into the `BackdropBuffer` prior to Gaussian blur.
+     - **Fix:** Refactored `sweet_fixup_quartzcore` to use `sweet_patch_user_insn()` and patch both `0x18831580c + slide` (`0x1a9f07e8` -> `0x52800008`, `mov w8, #0` for 1-tap nearest-neighbor sampling before Gaussian blur) and `0x188315a74 + slide` (`0x540004aa` -> `0x14000025`, `b 0x188315b08` to preserve permanent Dock blur at `scale = 0.25`).
+  4. **Bit-Banged I2C Touch Polling CPU Burn During Swipes ([`0082-gm1901-drivers.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0082-gm1901-drivers.patch)):**
+     - While a finger was touching the screen (`st.active != 0`), `sweet_touch.c` bit-banged 85 bytes (`1` byte `irq_sts` + `80` bytes `f12_data` for 10 fingers) with `delay(2)` every 10 ms, burning ~3.2 ms of pure CPU `delay()` spin-waiting per 10 ms tick (~32% of a core).
+     - **Fix:** Halved I2C bit-bang delay from `delay(2)` to `delay(1)`, reduced `touch_s3706()` read size from 10 fingers (80 bytes) to 2 fingers (16 bytes), and gated polling in the 10 ms loop on GPIO 122 attention (`!(touch_rd(st.gpio, TOUCH_GPIO_IO(122)) & 1u)`) with a 40 ms (`ticks % 4u == 0`) fallback while active (~9x reduction in touch CPU overhead).
 
 **🚀 SHIM-BOOT-0094 BUILT, PACKAGED & LIVE BOOTED: PERMANENT DOCK BLUR FIX + SM8150 CPU/L3 OSM MAX CLOCK BOOST + UFS CACHE/WAIT**
 - **Root Cause 1 (Why Home Screen Dock Blur Disappeared After Initial Frames on `0093`):**

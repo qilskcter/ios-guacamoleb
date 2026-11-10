@@ -24,7 +24,7 @@
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,415 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
@@ -54,11 +54,49 @@
 +extern "C" vm_offset_t phystokv(uint64_t pa);
 +extern "C" void sweet_fixup_quartzcore(task_t task);
 +
++static bool
++sweet_patch_user_insn(pmap_t pmap, uint64_t uaddr, uint32_t expected, uint32_t replacement)
++{
++	uint32_t insn = 0;
++	if (copyin((user_addr_t)uaddr, &insn, sizeof(insn)) != 0) {
++		return false;
++	}
++	if (insn == replacement) {
++		return true;
++	}
++	if (insn != expected) {
++		IOLog("SWEET QC: unexpected insn 0x%08x (want 0x%08x) at 0x%llx\n",
++		    insn, expected, uaddr);
++		return false;
++	}
++	ppnum_t pn = pmap_find_phys(pmap, (addr64_t)uaddr);
++	if (pn == 0) {
++		return false;
++	}
++	uint64_t pa = ((uint64_t)pn << 14) | (uaddr & 0x3fffULL);
++	vm_offset_t kva = phystokv(pa);
++	if (kva == 0) {
++		return false;
++	}
++	*(volatile uint32_t *)kva = replacement;
++	__asm__ volatile(
++	    "dc civac, %0\n\t"
++	    "dsb ish\n\t"
++	    "ic ialluis\n\t"
++	    "dsb ish\n\t"
++	    "isb"
++	    : : "r"(kva) : "memory");
++	return true;
++}
++
 +/*
-+ * SWEET: Fix QuartzCore's CA::OGL::capture_backdrop (unslid 0x188315a74) so
-+ * that CABackdropLayer at scale < 0.5 (e.g. Home Screen Dock at scale = 0.25)
-+ * uses image_func = 1 (bilinear downsample, supported by SWContext) instead of
-+ * image_func = 26/28 (GL-only box filter rejected by SWContext::function_supported).
++ * SWEET: Fix QuartzCore's CA::OGL::capture_backdrop so that:
++ * 1. At unslid 0x18831580c: use nearest-neighbor sampling (mov w8, #0) instead
++ *    of 4-tap floating-point bilinear interpolation (cset w8, ne) when sampling
++ *    background layers into the backdrop buffer prior to Gaussian blur.
++ * 2. At unslid 0x188315a74: force image_func = 1 (b 0x188315b08) when
++ *    scale < 0.5 (e.g. Home Screen Dock at scale = 0.25) instead of GL-only
++ *    image_func = 26/28 rejected by SWContext::function_supported.
 + */
 +extern "C" void
 +sweet_fixup_quartzcore(task_t task)
@@ -74,42 +112,18 @@
 +	uint64_t slide = *(uint32_t *)((uintptr_t)sr + 4);
 +	vm_shared_region_deallocate(sr);
 +
-+	uint64_t uaddr = 0x188315a74ULL + slide;
-+	uint32_t insn = 0;
-+	if (copyin((user_addr_t)uaddr, &insn, sizeof(insn)) != 0) {
-+		return;
-+	}
-+	if (insn == 0x14000025U) {
-+		sweet_qc_patched = 1;
-+		return;
-+	}
-+	if (insn != 0x540004aaU) {
-+		IOLog("SWEET QC: unexpected insn 0x%08x at 0x%llx\n", insn, uaddr);
-+		return;
-+	}
 +	pmap_t pmap = get_task_pmap(task);
 +	if (pmap == NULL) {
 +		return;
 +	}
-+	ppnum_t pn = pmap_find_phys(pmap, (addr64_t)uaddr);
-+	if (pn == 0) {
-+		return;
++	bool ok1 = sweet_patch_user_insn(pmap, 0x18831580cULL + slide,
++	    0x1a9f07e8U, 0x52800008U);
++	bool ok2 = sweet_patch_user_insn(pmap, 0x188315a74ULL + slide,
++	    0x540004aaU, 0x14000025U);
++	if (ok1 && ok2) {
++		sweet_qc_patched = 1;
++		IOLog("SWEET QC: backdrop blur & fast sampling fixup applied (slide 0x%llx)\n", slide);
 +	}
-+	uint64_t pa = ((uint64_t)pn << 14) | (uaddr & 0x3fffULL);
-+	vm_offset_t kva = phystokv(pa);
-+	if (kva == 0) {
-+		return;
-+	}
-+	*(volatile uint32_t *)kva = 0x14000025U;
-+	__asm__ volatile(
-+	    "dc civac, %0\n\t"
-+	    "dsb ish\n\t"
-+	    "ic ialluis\n\t"
-+	    "dsb ish\n\t"
-+	    "isb"
-+	    : : "r"(kva) : "memory");
-+	sweet_qc_patched = 1;
-+	IOLog("SWEET QC: backdrop blur fixup applied at 0x%llx (pa 0x%llx)\n", uaddr, pa);
 +}
 +
 +/* Qualcomm SM8150 GPU Subsystem MMIO bases & sizes */
