@@ -2,6 +2,21 @@
 
 ## Active handoff update (2026-11-10)
 
+**🚀 SHIM-BOOT-0093 READY & LIVE BOOTED: TWO CRITICAL ROOT CAUSES RESOLVED (HIGHMEM ADT + 0083 PATCH APPLIED IN CI)**
+- **Root Cause 1 (Why `0091` and `0092` went black / Sahara Crashdump after `UMD_INIT` while `0090` booted fine):**
+  1. Binary comparison of `shim/out/payload-0090.bin` vs `shim/out/payload-0091.bin` and `shim/out/payload-0092.bin` revealed that `payload-0090.bin` had `gm1901.adt` generated WITH `--highmem` (`phys_base = 0x100000000`, `mem_size = 0xfcc00000` / ~4 GiB high RAM), whereas `0091` and `0092` were packaged with lowmem `gm1901.adt` (`phys_base = 0xb0000000`, `mem_size = 0x4d000000`).
+  2. Furthermore, in `0092`, running `python3 tools/mkadt.py -o shim/out/gm1901.adt` wrote the output to a file literally named `-o` (`mkadt.py` takes the output path as positional `sys.argv[1]`), leaving `shim/out/gm1901.adt` untouched from `0091` (lowmem + `agx-a11`)!
+  3. Booting XNU on GM1901 (`guacamoleb`) with lowmem `dram-base = 0xb0000000` caused XNU VM/pmap to allocate physical pages across reserved TrustZone / modem memory regions around `0xb0000000..0xfd000000` right as `launchd` spawned userland daemons after `UMD_INIT`, immediately triggering a TrustZone XPU violation into Qualcomm Sahara Crashdump mode (`0x05c6:0x900e`) and turning the screen black.
+  4. **Fix:** Removed stray `-o` file and regenerated `shim/out/gm1901.adt` with `python3 tools/mkadt.py shim/out/gm1901.adt --highmem`. Verified `payload-0093.bin` header has `phys_base = 0x100000000` and `mem_size = 0xfcc00000`.
+- **Root Cause 2 (Why `0090` had NO GPU Alpha Compositing / 60 Hz Bulk Copy):**
+  1. CI build log inspection (`gh run view 42805222130 --log`, line 105) and disassembly of `__ZN9AppleCLCD7presentEPKh` proved that **`0083-sweet-fb-bulk-copy.patch` was silently skipped by `dxb/build.sh` in `0090`, `0091`, and `0092`!**
+  2. Reason: Hunk 3 (`@@ -391,9 +447,45 @@`) in [`xnu/patches/0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch) was missing the closing `-			}` of the `for` loop on line 398, causing `git apply` to reject the patch.
+  3. Because `0083` was skipped, `AppleCLCD` was stuck at `hz = 10` (10 FPS), calling `IOMallocData`/`IOFreeData` on every vsync, and executing raw `memcpy` on every layer (overwriting layer 0 wallpaper with transparent pixels instead of alpha blending).
+  4. **Fix (Commit `06fe1ee`):** Corrected hunk 3 in [`xnu/patches/0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch) (`@@ -391,10 +447,45 @@` with the closing `-			}`). Verified with `git -C /tmp/xnu apply --check`, confirmed in CI Run [42813407020](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42813407020) log that both `0083-sweet-fb-bulk-copy.patch` and `0084-gm1901-adreno-gpu.patch` applied with 0 warnings, and verified via `objdump --disassemble-symbols=__ZN9AppleCLCD7presentEPKh` on `xnu/out-0093/kernel.development.sweet` that the 128-bit NEON `ldp q0, q1` bulk copy and 32-bit fixed-point alpha blending (`0x00ff00ff` / `0x00800080`) are compiled into `AppleCLCD::present`.
+- **Packaged Boot Artifact:**
+  - Image: [`shim/out/shim-boot-0093.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0093.img) (26 MiB).
+  - SHA256: `c08f87b042edf207b88ec56178deae5fedc803ef1530b29d360b627f3b1edda4`.
+
 **🚀 SHIM-BOOT-0092 READY: 0091 BLACK SCREEN RESOLVED, STABLE BACKBOARDD & 60 FPS FIXED-POINT ALPHA BLUR**
 - **User Feedback & Photo Evidence (`uploaded_media_1794308025085.jpg`):**
   - Text console showed successful boot through `launchd` PID 1 and kernel personas setup (`JMD_INIT: setup kernel personas`).
