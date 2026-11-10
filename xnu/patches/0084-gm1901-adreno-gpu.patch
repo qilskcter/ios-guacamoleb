@@ -15,7 +15,7 @@
      "     'IOMatchCategory' = SweetBattery;"
      "   },"
 +    "   {"
-+    "     'IOClass'         = AGXAccelerator;"
++    "     'IOClass'         = SweetAccelerator;"
 +    "     'IOProviderClass' = IOPlatformDevice;"
 +    "     'IONameMatch'     = 'gpu';"
 +    "   },"
@@ -24,15 +24,11 @@
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,354 @@
+@@ -0,0 +1,272 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
-+ * Exposes the hardware graphics accelerator (IOAccelerator / AGXAccelerator / IOGPUDevice)
-+ * to CoreAnimation (RenderServer in backboardd) and Metal.
-+ * Unlocks hardware-accelerated composition and CABackdropLayer (Gaussian Blur)
-+ * across SpringBoard, Dock, Control Center, and App Switcher.
-+ *
++ * Powers on and sequences Adreno 640 GPUCC GDSC and clocks.
 + * Reverse-engineered from OxygenOS 10 kernel (SM8150 kgsl/a6xx driver) via MCP REA.
 + */
 +#include <pexpert/arm64/board_config.h>
@@ -68,43 +64,8 @@
 +
 +#define CHIP_ID_ADRENO_640     0x06040001U
 +
-+class IOAccelerator : public IOService {
-+	OSDeclareDefaultStructors(IOAccelerator);
-+public:
-+	bool init(OSDictionary *dictionary = NULL) APPLE_KEXT_OVERRIDE;
-+	void free() APPLE_KEXT_OVERRIDE;
-+	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
-+	void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
-+};
-+
-+OSDefineMetaClassAndStructors(IOAccelerator, IOService);
-+
-+bool
-+IOAccelerator::init(OSDictionary *dictionary)
-+{
-+	return IOService::init(dictionary);
-+}
-+
-+void
-+IOAccelerator::free()
-+{
-+	IOService::free();
-+}
-+
-+bool
-+IOAccelerator::start(IOService *provider)
-+{
-+	return IOService::start(provider);
-+}
-+
-+void
-+IOAccelerator::stop(IOService *provider)
-+{
-+	IOService::stop(provider);
-+}
-+
-+class AGXAccelerator : public IOAccelerator {
-+	OSDeclareDefaultStructors(AGXAccelerator);
++class SweetAccelerator : public IOService {
++	OSDeclareDefaultStructors(SweetAccelerator);
 +
 +public:
 +	volatile uint32_t *fGpuccBase;
@@ -122,12 +83,12 @@
 +	uint32_t readChipID();
 +};
 +
-+OSDefineMetaClassAndStructors(AGXAccelerator, IOAccelerator);
++OSDefineMetaClassAndStructors(SweetAccelerator, IOService);
 +
 +bool
-+AGXAccelerator::init(OSDictionary *dictionary)
++SweetAccelerator::init(OSDictionary *dictionary)
 +{
-+	if (!IOAccelerator::init(dictionary)) {
++	if (!IOService::init(dictionary)) {
 +		return false;
 +	}
 +	fGpuccBase = NULL;
@@ -139,17 +100,17 @@
 +}
 +
 +void
-+AGXAccelerator::free()
++SweetAccelerator::free()
 +{
 +	if (fLock) {
 +		IOLockFree(fLock);
 +		fLock = NULL;
 +	}
-+	IOAccelerator::free();
++	IOService::free();
 +}
 +
 +bool
-+AGXAccelerator::powerOnGPU()
++SweetAccelerator::powerOnGPU()
 +{
 +	/* Map GPU Clock Controller (GPUCC) at 0x02C90000 */
 +	fGpuccBase = (volatile uint32_t *)ml_io_map(ADRENO_GPUCC_BASE_PHYS, ADRENO_GPUCC_SIZE);
@@ -195,7 +156,7 @@
 +}
 +
 +uint32_t
-+AGXAccelerator::readChipID()
++SweetAccelerator::readChipID()
 +{
 +	if (fGpuBase != NULL) {
 +		uint32_t id = *fGpuBase;
@@ -207,9 +168,9 @@
 +}
 +
 +bool
-+AGXAccelerator::start(IOService *provider)
++SweetAccelerator::start(IOService *provider)
 +{
-+	if (!IOAccelerator::start(provider)) {
++	if (!IOService::start(provider)) {
 +		return false;
 +	}
 +
@@ -220,78 +181,35 @@
 +	fChipId = readChipID();
 +	IOLog("SWEET GPU: Adreno 640 hardware accelerator active\n");
 +
-+	setName("agx");
-+	setProperty("IOClass", "AGXAccelerator");
++	setName("SweetAccelerator");
 +	setProperty("IOGPUDevice", kOSBooleanTrue);
-+	setProperty("IOGPUFamily", "Apple");
++	setProperty("IOGPUFamily", "Generic");
 +	setProperty("IOGPUGL", kOSBooleanTrue);
 +	setProperty("IOGPUMetal", kOSBooleanTrue);
-+	setProperty("MetalPluginName", "AGXMetalA11");
-+	setProperty("MetalPluginClassName", "AGXMetalA11Device");
++	setProperty("MetalPluginName", "SweetAccelerator");
 +	setProperty("IOGPUNumCommandQueues", 4ULL, 32);
 +	setProperty("IOGPUMaxSurfaces", 64ULL, 32);
-+	setProperty("IOGPUGlobalSharedStorageSize", 0x20000000ULL, 64);
++	setProperty("IOGPUGlobalSharedStorageSize", 0x10000000ULL, 64);
 +	setProperty("IOGPUFeatureFlags", 0x1fULL, 32);
 +	setProperty("IOGPUPerformanceLevel", 3ULL, 32);
-+	setProperty("IOUserClientClass", "AGXDeviceUserClient");
++	setProperty("IOUserClientClass", "SweetAcceleratorUserClient");
 +
 +	registerService();
 +	return true;
 +}
 +
 +void
-+AGXAccelerator::stop(IOService *provider)
++SweetAccelerator::stop(IOService *provider)
 +{
-+	IOAccelerator::stop(provider);
++	IOService::stop(provider);
 +}
 +
-+class IOAcceleratorUserClient : public IOUserClient {
-+	OSDeclareDefaultStructors(IOAcceleratorUserClient);
++class SweetAcceleratorUserClient : public IOUserClient {
++	OSDeclareDefaultStructors(SweetAcceleratorUserClient);
 +
 +public:
-+	bool initWithTask(task_t owningTask, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
-+	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
-+	IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
-+	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-+	    IOExternalMethodDispatch *dispatch, OSObject *target,
-+	    void *reference) APPLE_KEXT_OVERRIDE;
-+};
-+
-+OSDefineMetaClassAndStructors(IOAcceleratorUserClient, IOUserClient);
-+
-+bool
-+IOAcceleratorUserClient::initWithTask(task_t owningTask, void *securityID, UInt32 type)
-+{
-+	return IOUserClient::initWithTask(owningTask, securityID, type);
-+}
-+
-+bool
-+IOAcceleratorUserClient::start(IOService *provider)
-+{
-+	return IOUserClient::start(provider);
-+}
-+
-+IOReturn
-+IOAcceleratorUserClient::clientClose(void)
-+{
-+	terminate();
-+	return kIOReturnSuccess;
-+}
-+
-+IOReturn
-+IOAcceleratorUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-+    __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
-+    __unused void *reference)
-+{
-+	return kIOReturnSuccess;
-+}
-+
-+class AGXDeviceUserClient : public IOAcceleratorUserClient {
-+	OSDeclareDefaultStructors(AGXDeviceUserClient);
-+
-+public:
-+	AGXAccelerator *fDriver;
-+	task_t          fTask;
++	SweetAccelerator *fDriver;
++	task_t            fTask;
 +
 +	bool initWithTask(task_t owningTask, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
 +	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
@@ -301,12 +219,12 @@
 +	    void *reference) APPLE_KEXT_OVERRIDE;
 +};
 +
-+OSDefineMetaClassAndStructors(AGXDeviceUserClient, IOAcceleratorUserClient);
++OSDefineMetaClassAndStructors(SweetAcceleratorUserClient, IOUserClient);
 +
 +bool
-+AGXDeviceUserClient::initWithTask(task_t owningTask, void *securityID, UInt32 type)
++SweetAcceleratorUserClient::initWithTask(task_t owningTask, void *securityID, UInt32 type)
 +{
-+	if (!IOAcceleratorUserClient::initWithTask(owningTask, securityID, type)) {
++	if (!IOUserClient::initWithTask(owningTask, securityID, type)) {
 +		return false;
 +	}
 +	fTask = owningTask;
@@ -315,24 +233,24 @@
 +}
 +
 +bool
-+AGXDeviceUserClient::start(IOService *provider)
++SweetAcceleratorUserClient::start(IOService *provider)
 +{
-+	fDriver = OSDynamicCast(AGXAccelerator, provider);
-+	if (fDriver == NULL || !IOAcceleratorUserClient::start(provider)) {
++	fDriver = OSDynamicCast(SweetAccelerator, provider);
++	if (fDriver == NULL || !IOUserClient::start(provider)) {
 +		return false;
 +	}
 +	return true;
 +}
 +
 +IOReturn
-+AGXDeviceUserClient::clientClose(void)
++SweetAcceleratorUserClient::clientClose(void)
 +{
 +	terminate();
 +	return kIOReturnSuccess;
 +}
 +
 +IOReturn
-+AGXDeviceUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
++SweetAcceleratorUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
 +    __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
 +    __unused void *reference)
 +{
