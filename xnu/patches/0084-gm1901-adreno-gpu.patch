@@ -50,9 +50,9 @@
 +extern "C" vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
 +extern "C" void *vm_shared_region_get(task_t task);
 +extern "C" void vm_shared_region_deallocate(void *sr);
-+extern "C" void *get_task_pmap(task_t task);
-+extern "C" ppnum_t pmap_find_phys(void *pmap, addr64_t va);
++extern "C" ppnum_t pmap_find_phys(pmap_t pmap, addr64_t va);
 +extern "C" vm_offset_t phystokv(uint64_t pa);
++extern "C" void sweet_fixup_quartzcore(task_t task);
 +
 +/*
 + * SWEET: Fix QuartzCore's CA::OGL::capture_backdrop (unslid 0x188315a74) so
@@ -87,7 +87,7 @@
 +		IOLog("SWEET QC: unexpected insn 0x%08x at 0x%llx\n", insn, uaddr);
 +		return;
 +	}
-+	void *pmap = get_task_pmap(task);
++	pmap_t pmap = get_task_pmap(task);
 +	if (pmap == NULL) {
 +		return;
 +	}
