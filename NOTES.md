@@ -23,6 +23,7 @@
   - Downloaded kernel to [`xnu/out-0095/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0095/kernel.development.sweet) (verified `_sweet_fixup_quartzcore` at `0xfffffe0007a6749c`, `__ZN16SweetAccelerator14boostCPUClocksEv` at `0xfffffe0007a678f4`, and `__ZN9AppleCLCD7presentEPKh` at `0xfffffe0007a651b0`).
   - Image: [`shim/out/shim-boot-0095.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0095.img) (26 MiB, `--highmem` ADT `phys_base = 0x100000000`).
   - SHA256: `a9aeaa4d1d279a6c488ec30d46fc82db118d23a31e466bb93afd3508a9a34f91`.
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0095.img` (`Sending 'boot.img' (26296 KB) OKAY [0.620s]`, `Booting OKAY [0.080s]`, `Total time: 0.726s`).
 
 **🚀 SHIM-BOOT-0094 BUILT, PACKAGED & LIVE BOOTED: PERMANENT DOCK BLUR FIX + SM8150 CPU/L3 OSM MAX CLOCK BOOST + UFS CACHE/WAIT**
 - **Root Cause 1 (Why Home Screen Dock Blur Disappeared After Initial Frames on `0093`):**
