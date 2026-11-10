@@ -1,5 +1,5 @@
---- a/iokit/Kernel/arm/SweetFramebuffer.cpp	2026-11-03 21:49:30
-+++ b/iokit/Kernel/arm/SweetFramebuffer.cpp	2026-11-03 21:49:30
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
 @@ -192,7 +192,7 @@
  		IOLog("SWEET FB: no vsync timer\n");
  		return false;
@@ -9,7 +9,7 @@
  	PE_parse_boot_argn("sweetfb_hz", &hz, sizeof(hz));
  	fFlushTicks = (hz == 0 || hz >= 60) ? 1 : 60 / hz;
  	fVsync->setTimeoutUS(SWEET_FB_VSYNC_US);
-@@ -243,18 +243,16 @@
+@@ -243,20 +243,18 @@
  		return;
  	}
  	bool flush = fb->fDirty && (count % fb->fFlushTicks) == 0;
@@ -28,16 +28,21 @@
  	}
  	IOLockUnlock(fb->fLock);
 -	if (rec != NULL) {
++	sender->setTimeoutUS(SWEET_FB_VSYNC_US);
 +	if (do_present) {
  		fb->present(rec);
 -		IOFreeData(rec, SWEET_FB_SWAP_REC_SIZE);
  	}
- 	sender->setTimeoutUS(SWEET_FB_VSYNC_US);
+-	sender->setTimeoutUS(SWEET_FB_VSYNC_US);
  }
-@@ -307,7 +305,64 @@
+ 
+ void
+@@ -305,7 +303,64 @@
+ 	IOLockUnlock(fLock);
+ 	if ((++sweet_fb_swap_count % 1000) == 0) {
  		IOLog("SWEET FB: %llu swaps\n", sweet_fb_swap_count);
- 	}
- }
++	}
++}
 +
 +static inline void
 +sweet_fast_copy_row(uint8_t *dst, const uint8_t *src, size_t len)
@@ -45,7 +50,7 @@
 +	size_t n = len / 64;
 +	const uint64_t *s = (const uint64_t *)src;
 +	uint64_t *d = (uint64_t *)dst;
- 
++
 +	while (n--) {
 +		uint64_t a = s[0];
 +		uint64_t b = s[1];
@@ -82,7 +87,7 @@
 +	if (len >= 8) {
 +		*d++ = *s++;
 +		len -= 8;
-+	}
+ 	}
 +	if (len >= 4) {
 +		*(uint32_t *)d = *(const uint32_t *)s;
 +		d = (uint64_t *)((uint8_t *)d + 4);
@@ -94,12 +99,10 @@
 +	while (len--) {
 +		*d8++ = *s8++;
 +	}
-+}
-+
+ }
+ 
  void
- AppleCLCD::present(const uint8_t *rec)
- {
-@@ -391,10 +447,45 @@
+@@ -391,10 +446,45 @@
  			src = 0;
  		}
  		if (src != 0 && bpe == 4) {
@@ -107,7 +110,6 @@
 -				memcpy((void *)(fPixels + (uint64_t)(dy + y) * fRowBytes + (uint64_t)dx * 4),
 -				    (const void *)(src + s->offset + (uint64_t)(sy + y) * s->bytesPerRow + (uint64_t)sx * 4),
 -				    (size_t)w * 4);
--			}
 +			size_t rowBytesToCopy = (size_t)w * 4;
 +			const uint8_t *srcRow = (const uint8_t *)(src + s->offset + (uint64_t)sy * s->bytesPerRow + (uint64_t)sx * 4);
 +			uint8_t *dstRow = (uint8_t *)(fPixels + (uint64_t)dy * fRowBytes + (uint64_t)dx * 4);
@@ -147,6 +149,22 @@
 +					srcRow += s->bytesPerRow;
 +					dstRow += fRowBytes;
 +				}
-+			}
+ 			}
  		}
  		s->release();
+@@ -470,6 +560,7 @@
+ }
+ 
+ static uint64_t sweet_fb_logged;        /* selectors already logged (< 64) */
++extern "C" void sweet_fixup_quartzcore(task_t task);
+ 
+ IOReturn
+ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
+@@ -486,6 +577,7 @@
+ 		outCount = 1;
+ 		break;
+ 	case kSweetFBSwapBegin:
++		sweet_fixup_quartzcore(fTask);
+ 		IOLockLock(fFB->fLock);
+ 		out[0] = ++fFB->fSwapID;
+ 		IOLockUnlock(fFB->fLock);

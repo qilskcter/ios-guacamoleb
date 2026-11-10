@@ -24,12 +24,13 @@
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,272 @@
+@@ -0,0 +1,401 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
-+ * Powers on and sequences Adreno 640 GPUCC GDSC and clocks.
-+ * Reverse-engineered from OxygenOS 10 kernel (SM8150 kgsl/a6xx driver) via MCP REA.
++ * Powers on and sequences Adreno 640 GPUCC GDSC and clocks, boosts SM8150
++ * Kryo 485 CPU & L3 OSM performance states, and applies QuartzCore
++ * CABackdropLayer software downsample fixup.
 + */
 +#include <pexpert/arm64/board_config.h>
 +
@@ -44,8 +45,72 @@
 +#include <mach/mach_types.h>
 +#include <machine/machine_routines.h>
 +#include <sys/proc.h>
++#include <sys/systm.h>
 +
 +extern "C" vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
++extern "C" void *vm_shared_region_get(task_t task);
++extern "C" void vm_shared_region_deallocate(void *sr);
++extern "C" void *get_task_pmap(task_t task);
++extern "C" ppnum_t pmap_find_phys(void *pmap, addr64_t va);
++extern "C" vm_offset_t phystokv(uint64_t pa);
++
++/*
++ * SWEET: Fix QuartzCore's CA::OGL::capture_backdrop (unslid 0x188315a74) so
++ * that CABackdropLayer at scale < 0.5 (e.g. Home Screen Dock at scale = 0.25)
++ * uses image_func = 1 (bilinear downsample, supported by SWContext) instead of
++ * image_func = 26/28 (GL-only box filter rejected by SWContext::function_supported).
++ */
++extern "C" void
++sweet_fixup_quartzcore(task_t task)
++{
++	static int sweet_qc_patched = 0;
++	if (sweet_qc_patched || task == NULL) {
++		return;
++	}
++	void *sr = vm_shared_region_get(task);
++	if (sr == NULL) {
++		return;
++	}
++	uint64_t slide = *(uint32_t *)((uintptr_t)sr + 4);
++	vm_shared_region_deallocate(sr);
++
++	uint64_t uaddr = 0x188315a74ULL + slide;
++	uint32_t insn = 0;
++	if (copyin((user_addr_t)uaddr, &insn, sizeof(insn)) != 0) {
++		return;
++	}
++	if (insn == 0x14000025U) {
++		sweet_qc_patched = 1;
++		return;
++	}
++	if (insn != 0x540004aaU) {
++		IOLog("SWEET QC: unexpected insn 0x%08x at 0x%llx\n", insn, uaddr);
++		return;
++	}
++	void *pmap = get_task_pmap(task);
++	if (pmap == NULL) {
++		return;
++	}
++	ppnum_t pn = pmap_find_phys(pmap, (addr64_t)uaddr);
++	if (pn == 0) {
++		return;
++	}
++	uint64_t pa = ((uint64_t)pn << 14) | (uaddr & 0x3fffULL);
++	vm_offset_t kva = phystokv(pa);
++	if (kva == 0) {
++		return;
++	}
++	*(volatile uint32_t *)kva = 0x14000025U;
++	__asm__ volatile(
++	    "dc civac, %0\n\t"
++	    "dsb ish\n\t"
++	    "ic ialluis\n\t"
++	    "dsb ish\n\t"
++	    "isb"
++	    : : "r"(kva) : "memory");
++	sweet_qc_patched = 1;
++	IOLog("SWEET QC: backdrop blur fixup applied at 0x%llx (pa 0x%llx)\n", uaddr, pa);
++}
 +
 +/* Qualcomm SM8150 GPU Subsystem MMIO bases & sizes */
 +#define ADRENO_GPUCC_BASE_PHYS 0x02C90000ULL
@@ -64,6 +129,19 @@
 +
 +#define CHIP_ID_ADRENO_640     0x06040001U
 +
++/* Qualcomm SM8150 OSM (Operating State Manager) physical base & domain offsets */
++#define SM8150_OSM_PHYS_BASE   0x18320000ULL
++#define SM8150_OSM_MAP_SIZE    0x0000C000ULL
++#define OSM_OFF_L3             0x1000U
++#define OSM_OFF_SILVER         0x3000U
++#define OSM_OFF_GOLD           0x5800U
++#define OSM_OFF_PRIME          0x7800U
++#define OSM_REG_ENABLE         0x000U
++#define OSM_REG_LUT_BASE       0x110U
++#define OSM_REG_PERF_DESIRED   0x920U
++#define OSM_LUT_ROW_STRIDE     0x20U
++#define OSM_LUT_MAX_ROWS       40U
++
 +class SweetAccelerator : public IOService {
 +	OSDeclareDefaultStructors(SweetAccelerator);
 +
@@ -79,6 +157,7 @@
 +	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
 +	void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
 +
++	void boostCPUClocks();
 +	bool powerOnGPU();
 +	uint32_t readChipID();
 +};
@@ -107,6 +186,55 @@
 +		fLock = NULL;
 +	}
 +	IOService::free();
++}
++
++void
++SweetAccelerator::boostCPUClocks()
++{
++	uintptr_t osm_base = (uintptr_t)ml_io_map(SM8150_OSM_PHYS_BASE, SM8150_OSM_MAP_SIZE);
++	if (osm_base == 0) {
++		IOLog("SWEET CPU: Failed to map SM8150 OSM\n");
++		return;
++	}
++	static const uint32_t dom_offsets[4] = {
++		OSM_OFF_L3, OSM_OFF_SILVER, OSM_OFF_GOLD, OSM_OFF_PRIME
++	};
++	static const char *dom_names[4] = {
++		"L3", "Silver", "Gold", "Prime"
++	};
++	for (int d = 0; d < 4; d++) {
++		uintptr_t dom = osm_base + dom_offsets[d];
++		uint32_t en = *(volatile uint32_t *)(dom + OSM_REG_ENABLE);
++		if (!(en & 1U)) {
++			continue;
++		}
++		uint32_t max_idx = 0;
++		uint32_t prev_lval = 0, prev_src = 0;
++		uint32_t max_lval = 0;
++		for (uint32_t i = 0; i < OSM_LUT_MAX_ROWS; i++) {
++			uint32_t val = *(volatile uint32_t *)(dom + OSM_REG_LUT_BASE + i * OSM_LUT_ROW_STRIDE);
++			uint32_t lval = val & 0xffU;
++			uint32_t src = (val >> 30) & 0x3U;
++			if (lval == 0 && src == 0) {
++				break;
++			}
++			if (i > 0 && lval == prev_lval && src == prev_src) {
++				break;
++			}
++			max_idx = i;
++			max_lval = lval;
++			prev_lval = lval;
++			prev_src = src;
++		}
++		if (max_idx > 0) {
++			uint32_t old_idx = *(volatile uint32_t *)(dom + OSM_REG_PERF_DESIRED);
++			*(volatile uint32_t *)(dom + OSM_REG_PERF_DESIRED) = max_idx;
++			(void)*(volatile uint32_t *)(dom + OSM_REG_ENABLE);
++			__asm__ volatile("dsb sy" ::: "memory");
++			IOLog("SWEET CPU: %s OSM idx %u -> %u (~%u MHz)\n",
++			    dom_names[d], old_idx & 0x3fU, max_idx, (max_lval * 192U) / 10U);
++		}
++	}
 +}
 +
 +bool
@@ -175,6 +303,7 @@
 +	}
 +
 +	fLock = IOLockAlloc();
++	boostCPUClocks();
 +	powerOnGPU();
 +	fGmuBase = (volatile uint32_t *)ml_io_map(ADRENO_GMU_BASE_PHYS, ADRENO_GMU_SIZE);
 +	fGpuBase = (volatile uint32_t *)ml_io_map(ADRENO_GPU_BASE_PHYS, ADRENO_GPU_SIZE);
