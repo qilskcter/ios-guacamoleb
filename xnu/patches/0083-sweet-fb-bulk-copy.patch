@@ -99,7 +99,7 @@
  void
  AppleCLCD::present(const uint8_t *rec)
  {
-@@ -391,9 +447,45 @@
+@@ -391,10 +447,45 @@
  			src = 0;
  		}
  		if (src != 0 && bpe == 4) {
@@ -107,6 +107,7 @@
 -				memcpy((void *)(fPixels + (uint64_t)(dy + y) * fRowBytes + (uint64_t)dx * 4),
 -				    (const void *)(src + s->offset + (uint64_t)(sy + y) * s->bytesPerRow + (uint64_t)sx * 4),
 -				    (size_t)w * 4);
+-			}
 +			size_t rowBytesToCopy = (size_t)w * 4;
 +			const uint8_t *srcRow = (const uint8_t *)(src + s->offset + (uint64_t)sy * s->bytesPerRow + (uint64_t)sx * 4);
 +			uint8_t *dstRow = (uint8_t *)(fPixels + (uint64_t)dy * fRowBytes + (uint64_t)dx * 4);
