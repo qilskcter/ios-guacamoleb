@@ -2,10 +2,10 @@
 
 ## Active handoff update (2026-11-11)
 
-**🚀 SHIM-BOOT-0095 IN PROGRESS: 60 FPS ANIMATION LAG ELIMINATION (IMMEDIATE SWAP PRESENT + CACHED LAYER-0 BLEND + QUARTZCORE NEAREST SAMPLING + 9X FASTER TOUCH I2C)**
+**🚀 SHIM-BOOT-0095 BUILT & PACKAGED: 60 FPS ANIMATION LAG ELIMINATION (IMMEDIATE SWAP PRESENT + CACHED LAYER-0 BLEND + QUARTZCORE NEAREST SAMPLING + 9X FASTER TOUCH I2C)**
 - **User Observation on `0094`:**
   - Home Screen Dock `CABackdropLayer` blur now stays permanently (`sweet_fixup_quartzcore` at `0x188315a74` confirmed working), **but UI animations are still very laggy**.
-- **Root Causes of Animation Lag on `0094` & Fixes in `0095`:**
+- **Root Causes of Animation Lag on `0094` & Fixes in `0095` (Commit `8aa7893`):**
   1. **`SweetFramebuffer` VSync WorkLoop Blocking (`AppleCLCD::swap` / `vsyncFired` in [`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):**
      - Previously, `AppleCLCD::swap()` only copied `rec` to `fPending` and waited for `vsyncFired` on the single-threaded `fWorkLoop` to call `fb->present(rec)`. Running `present(rec)` (8–12 ms) on `fWorkLoop` blocked subsequent VSync timer callbacks, causing `backboardd`'s `CADisplayLink` to miss alternate VSync deadlines and drop animations to 30 FPS with severe judder.
      - **Fix:** `AppleCLCD::swap(rec)` now calls `present(local_rec)` **immediately** on the calling `backboardd` thread (`kSweetFBSwapEnd`) while `fDirty` is cleared, leaving `fWorkLoop` free to deliver 60 Hz VSync Mach notifications with < 5 us latency and zero jitter.
@@ -18,6 +18,11 @@
   4. **Bit-Banged I2C Touch Polling CPU Burn During Swipes ([`0082-gm1901-drivers.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0082-gm1901-drivers.patch)):**
      - While a finger was touching the screen (`st.active != 0`), `sweet_touch.c` bit-banged 85 bytes (`1` byte `irq_sts` + `80` bytes `f12_data` for 10 fingers) with `delay(2)` every 10 ms, burning ~3.2 ms of pure CPU `delay()` spin-waiting per 10 ms tick (~32% of a core).
      - **Fix:** Halved I2C bit-bang delay from `delay(2)` to `delay(1)`, reduced `touch_s3706()` read size from 10 fingers (80 bytes) to 2 fingers (16 bytes), and gated polling in the 10 ms loop on GPIO 122 attention (`!(touch_rd(st.gpio, TOUCH_GPIO_IO(122)) & 1u)`) with a 40 ms (`ticks % 4u == 0`) fallback while active (~9x reduction in touch CPU overhead).
+- **CI Build & Packaged Boot Artifact:**
+  - GitHub Actions Run [42866150897](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42866150897) (commit `8aa7893`) SUCCEEDED in 8m32s.
+  - Downloaded kernel to [`xnu/out-0095/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0095/kernel.development.sweet) (verified `_sweet_fixup_quartzcore` at `0xfffffe0007a6749c`, `__ZN16SweetAccelerator14boostCPUClocksEv` at `0xfffffe0007a678f4`, and `__ZN9AppleCLCD7presentEPKh` at `0xfffffe0007a651b0`).
+  - Image: [`shim/out/shim-boot-0095.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0095.img) (26 MiB, `--highmem` ADT `phys_base = 0x100000000`).
+  - SHA256: `a9aeaa4d1d279a6c488ec30d46fc82db118d23a31e466bb93afd3508a9a34f91`.
 
 **🚀 SHIM-BOOT-0094 BUILT, PACKAGED & LIVE BOOTED: PERMANENT DOCK BLUR FIX + SM8150 CPU/L3 OSM MAX CLOCK BOOST + UFS CACHE/WAIT**
 - **Root Cause 1 (Why Home Screen Dock Blur Disappeared After Initial Frames on `0093`):**
