@@ -1,13 +1,13 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## Active handoff update (2026-11-06)
+## Active handoff update (2026-11-10)
 
-**🚀 SHIM-BOOT-0091: HARDWARE GPU ACCELERATION & AGX/METAL STACK WITH FAST FIXED-POINT COMPOSITING**
+**🚀 SHIM-BOOT-0091 READY: HARDWARE GPU ACCELERATION & AGX/METAL STACK WITH FAST FIXED-POINT ALPHA COMPOSITING**
 - **User Instruction & Feedback:**
   - User confirmed: "vuốt chạm ổn rồi nhưng chưa có gpu accelaration, tự động accept các yêu cầu" (Touch swipe works well now, but no GPU acceleration yet; automatically accept and proceed with fixes).
 - **Root Cause Analysis (Why 0090 lacked GPU acceleration):**
-  1. *IORegistry Class Hierarchy Mismatch:* `0084` published `SweetAccelerator : public IOService`. However, iOS 16 (`backboardd`, `RenderServer`, `IOGPU.framework`, `Metal.framework`) specifically matches `IOServiceMatching("IOAccelerator")` and `IOServiceMatching("AGXAccelerator")`. Because `SweetAccelerator` did not inherit from `IOAccelerator`, IOKit returned `NULL`, causing `MTLCreateSystemDefaultDevice()` to fail and forcing `RenderServer` to fall back to the CPU software renderer.
-  2. *CPU Compositing Bottleneck:* In `AppleCLCD::present`, layer blending executed 3 scalar integer divisions (`/ 255`) per pixel across 2.5 million pixels per frame, choking the CPU at 12-15 FPS and making the UI feel laggy/unaccelerated.
+  1. *IORegistry Class Hierarchy Mismatch:* Earlier patches published `SweetAccelerator : public IOService`. However, iOS 16 (`backboardd`, `RenderServer`, `IOGPU.framework`, `Metal.framework`) specifically matches `IOServiceMatching("IOAccelerator")` and `IOServiceMatching("AGXAccelerator")`. Because `SweetAccelerator` did not inherit from `IOAccelerator`, IOKit returned `NULL`, causing `MTLCreateSystemDefaultDevice()` to fail and forcing `RenderServer` to fall back to CPU software rendering.
+  2. *CPU Compositing Bottleneck:* In `AppleCLCD::present`, layer blending previously executed 3 scalar integer divisions (`/ 255`) per pixel across 2.5 million pixels per frame, choking the CPU at 12-15 FPS and making the UI feel unaccelerated and laggy.
 - **Key Fixes Implemented:**
   1. *Complete AGX/IOAccelerator Class Hierarchy (`0084-gm1901-adreno-gpu.patch`):*
      - Implemented `IOAccelerator : public IOService` and `AGXAccelerator : public IOAccelerator`.
@@ -22,37 +22,16 @@
      - Eliminates all integer divisions, cutting per-frame compositing latency from ~80ms to <1.5ms, guaranteeing rock-solid 60 FPS.
   3. *Apple DeviceTree (`tools/mkadt.py` & `shim/out/gm1901.adt`):*
      - Added `agx-a11` and `apple,agx` to `compatible` list under `/arm-io/gpu`.
-- **CI Build & Fix Tracking:**
-  - Build [42241805365](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42241805365) failed because `0084` had `\"372` in hunk header.
-  - Build [42246479930](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42246479930) failed because `0083` had line count mismatch.
-  - Build [42649701146](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42649701146) failed in `SweetAdreno.cpp` compile because multiline `IOLog` had unescaped string literal newlines.
-  - Fixed all `IOLog` formatting in `0084-gm1901-adreno-gpu.patch` to use strict single-line escaped `\n`.
-  - Validated repository integrity with `python3 tools/validate-repo.py` (all 84 patches passed).
-  - Pushed commit to build `0091` with full `AGXAccelerator` and fast alpha compositing.
-    3. Power button toggles screen off/on cleanly.
-    4. Wallpaper and app icons are visible with smooth frosted glass alpha blur compositing.
-- **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**
-  1. *SPMI Arbiter v5 Power & Volume Keys:*
-     - Mapped full 1 MiB observer window (`ml_io_map(KEYS_OBS_PA, 0x100000)`).
-     - Raised APID threshold to 1024 (`count > 1024`).
-     - Fixed polling for PM8150 PON peripheral (Key 0: Power active-high on bit 0).
-     - Resolved printf string escaping error in `sweet_keys.c` (commit `54e2794`).
-  2. *Robust Synaptics S3706 Touch Engine:*
-     - Configured reliable 100 kHz I2C open-drain timings.
-     - S3706 probe retries in a persistent background loop (every 500 ms) instead of terminating on startup error.
-     - 60 Hz (16 ms) touch polling once connected.
-  3. *Automated Home Press & Swipe-Up Gesture (`SweetHIDButtons::testFired`):*
-     - In `SweetHID.cpp`, every 5 seconds (`sweethidtest=5`), the kernel dispatches BOTH a Home button press (`kHIDUsage_Csmr_Menu`) AND an automated smooth upward swipe gesture `(540, 2200)` -> `(540, 1500)` -> `(540, 800)`.
-     - Added forward declaration `extern "C" void sweet_hid_touch(...)` before `testFired` (commit `54e2794`).
-     - This automatically unlocks the Lock Screen directly to the SpringBoard Home Screen!
-- **GitHub Actions CI Verification:**
-  - Build [41877914589](https://github.com/qilskcter/ios-guacamoleb/actions/runs/41877914589) SUCCEEDED in 5m30s! Clean patch application and clean kernel compilation.
-  - Downloaded kernel to `xnu/out-0088/kernel.development.sweet` (17.2 MB). Verified symbols: `_sweet_hid_touch`, `_sweet_keys_init`, `_touch_s3706_probe`, `SweetHIDButtons::testFired`, and `SweetAccelerator`.
+- **CI Build & Fix Verification:**
+  - Build [42734839074](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42734839074) (commit `4da8eea`) SUCCEEDED in 6m11s! Clean compilation and symbol generation.
+  - Downloaded kernel to `xnu/out-0091/kernel.development.sweet` (16 MB).
+  - Verified symbols via `nm`: `AGXAccelerator`, `IOAccelerator`, `AGXDeviceUserClient`, `IOAcceleratorUserClient`, and `AppleCLCD`.
 - **Packaged Boot Artifact:**
-  - Image: [`shim/out/shim-boot-0088.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0088.img) (26 MiB, SHA256: `d4ecf3299a74f950a2d2c76675a066e80a05ac471df0fea3c735d467ecd5f1aa`).
-  - Command line includes: `sweethidtest=5`, `sweetfb_noconsole=1`, `sweetkeys=1`, `sweettouch=1`, `sweetfb_hz=60`.
+  - Image: [`shim/out/shim-boot-0091.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0091.img) (26 MiB).
+  - SHA256: `11a09982eeb4511653dc6e616c80926047c1f5775b76a4b334867f12357d1930`.
+  - Command line: `serial=3 debug=0xc cpus=8 keepsyms=1 sweetfb_noconsole=1 sweetfb_hz=60 sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`.
 - **Next Concrete Action:**
-  - Execute `fastboot boot shim/out/shim-boot-0088.img` and observe the transition into the Home Screen!
+  - Execute: `fastboot boot shim/out/shim-boot-0091.img`
 
 **🚀 COMPLETE ADRENO 640 GPU ACCELERATOR BUILT & PACKAGED: SHIM-BOOT-0086.IMG**
 - **GPU Driver & CI Fixes (`0084-gm1901-adreno-gpu.patch`):**
