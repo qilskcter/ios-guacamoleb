@@ -30,7 +30,11 @@
   - SHA256: `b95e632d95c129913f85bf31d8f6dcaea0c28edb6fa39444aac6b61f461c7f7f`.
   - Command line: `serial=3 debug=0xc cpus=8 keepsyms=1 sweetfb_noconsole=1 sweetfb_hz=60 sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`.
 - **Next Concrete Action:**
-  - Execute: `fastboot boot shim/out/shim-boot-0092.img`.
+  - Booted [`shim/out/shim-boot-0092.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0092.img) to GM1901 (`85d68e24 fastboot`) at 18:27:17:
+    - `Sending 'boot.img' (26296 KB) OKAY [0.679s]`
+    - `Booting OKAY [0.081s]`
+    - Total time: `0.776s`.
+  - Observe display transition: verify Lock Screen appears cleanly, no black screen, touch/swipe responsive, and 60 FPS fixed-point alpha compositing active.
 
 **🚀 COMPLETE ADRENO 640 GPU ACCELERATOR BUILT & PACKAGED: SHIM-BOOT-0086.IMG**
 - **GPU Driver & CI Fixes (`0084-gm1901-adreno-gpu.patch`):**
