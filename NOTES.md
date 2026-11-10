@@ -23,10 +23,12 @@
   3. *Apple DeviceTree (`tools/mkadt.py` & `shim/out/gm1901.adt`):*
      - Added `agx-a11` and `apple,agx` to `compatible` list under `/arm-io/gpu`.
 - **CI Build & Fix Tracking:**
-  - Build [42241805365](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42241805365) failed because `0084` was skipped due to a typo in the hunk header (escaped quote `\"372`).
-  - Build [42246479930](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42246479930) failed because `0083` was skipped due to hunk line count mismatch (`-391,10 +447,46` instead of `-391,9 +447,45`).
-  - Fixed hunk header at line 102 in `0083-sweet-fb-bulk-copy.patch`. Both 0083 and 0084 verified format-valid with `git apply --check` and `tools/validate-repo.py`.
-  - Pushed commit to build `0091` with both fast fixed-point alpha compositing and full `AGXAccelerator`/`IOAccelerator` compiled into the kernel.
+  - Build [42241805365](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42241805365) failed because `0084` had `\"372` in hunk header.
+  - Build [42246479930](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42246479930) failed because `0083` had line count mismatch.
+  - Build [42649701146](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42649701146) failed in `SweetAdreno.cpp` compile because multiline `IOLog` had unescaped string literal newlines.
+  - Fixed all `IOLog` formatting in `0084-gm1901-adreno-gpu.patch` to use strict single-line escaped `\n`.
+  - Validated repository integrity with `python3 tools/validate-repo.py` (all 84 patches passed).
+  - Pushed commit to build `0091` with full `AGXAccelerator` and fast alpha compositing.
     3. Power button toggles screen off/on cleanly.
     4. Wallpaper and app icons are visible with smooth frosted glass alpha blur compositing.
 - **Kernel Fixes Implemented (`0082-gm1901-drivers.patch`, commits `5ff2b06` & `54e2794`):**

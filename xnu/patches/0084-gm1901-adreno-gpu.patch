@@ -24,7 +24,7 @@
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,372 @@
+@@ -0,0 +1,354 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
@@ -154,20 +154,11 @@
 +	/* Map GPU Clock Controller (GPUCC) at 0x02C90000 */
 +	fGpuccBase = (volatile uint32_t *)ml_io_map(ADRENO_GPUCC_BASE_PHYS, ADRENO_GPUCC_SIZE);
 +	if (fGpuccBase == NULL) {
-+		IOLog("SWEET GPU: Failed to map GPUCC at 0x%llx
-+", ADRENO_GPUCC_BASE_PHYS);
++		IOLog("SWEET GPU: Failed to map GPUCC\n");
 +		return false;
 +	}
 +
-+	/*
-+	 * Hardware Power-up Sequence (reverse-engineered from OxygenOS 10 kernel):
-+	 * 1. Power on CX GDSC (0x9108) and wait for status bit 31
-+	 * 2. Enable GPU CC AHB clock (0x1078)
-+	 * 3. Enable GPU CC CX GMU clock (0x1098)
-+	 * 4. Power on GX GDSC (3D core GDSC) (0x905C) and wait for status bit 31
-+	 * 5. Enable GPU CC GX GFX3D clock (0x1054)
-+	 * This ensures the Qualcomm NOC / XPU allows bus access without faulting into EDL.
-+	 */
++	/* Hardware Power-up Sequence */
 +	volatile uint32_t *cx_gdsc = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_CX_GDSC_OFFSET);
 +	volatile uint32_t *gx_gdsc = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_GX_GDSC_OFFSET);
 +	volatile uint32_t *ahb_clk = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_AHB_CLK_OFFSET);
@@ -199,9 +190,7 @@
 +	*gfx_clk |= 1;
 +	__asm__ volatile("dsb sy" ::: "memory");
 +
-+	IOLog("SWEET GPU: Hardware clocks and GDSC power domains active (cx=0x%08x gx=0x%08x)
-+",
-+	    *cx_gdsc, *gx_gdsc);
++	IOLog("SWEET GPU: Hardware clocks and GDSC active\n");
 +	return true;
 +}
 +
@@ -225,19 +214,12 @@
 +	}
 +
 +	fLock = IOLockAlloc();
-+
-+	/* Power on GPU clocks and power domains safely */
 +	powerOnGPU();
-+
-+	/* Map GMU and GPU MMIO regions */
 +	fGmuBase = (volatile uint32_t *)ml_io_map(ADRENO_GMU_BASE_PHYS, ADRENO_GMU_SIZE);
 +	fGpuBase = (volatile uint32_t *)ml_io_map(ADRENO_GPU_BASE_PHYS, ADRENO_GPU_SIZE);
-+
 +	fChipId = readChipID();
-+	IOLog("SWEET GPU: Adreno 640 hardware accelerator active (chip_id=0x%08x)
-+", fChipId);
++	IOLog("SWEET GPU: Adreno 640 hardware accelerator active\n");
 +
-+	/* Publish Apple GPU properties expected by iOS 16 CoreAnimation, Metal & IOGPU */
 +	setName("agx");
 +	setProperty("IOClass", "AGXAccelerator");
 +	setProperty("IOGPUDevice", kOSBooleanTrue);
@@ -364,33 +346,33 @@
 +	}
 +
 +	switch (selector) {
-+	case 0: /* Open / Initialize Context */
++	case 0:
 +		if (args->scalarOutputCount > 0) {
-+			args->scalarOutput[0] = 1; /* context token */
++			args->scalarOutput[0] = 1;
 +		}
 +		break;
-+	case 1: /* Close Context */
++	case 1:
 +		break;
-+	case 2: /* Create Command Queue */
++	case 2:
 +		if (args->scalarOutputCount > 0) {
-+			args->scalarOutput[0] = 1; /* queue id */
++			args->scalarOutput[0] = 1;
 +		}
 +		break;
-+	case 7: /* Get Device Capabilities / Config */
++	case 7:
 +		if (args->scalarOutputCount >= 2) {
 +			args->scalarOutput[0] = CHIP_ID_ADRENO_640;
-+			args->scalarOutput[1] = 0x00010000; /* feature flags */
++			args->scalarOutput[1] = 0x00010000;
 +		}
 +		break;
-+	case 9: /* Allocate Shared Surface Memory */
++	case 9:
 +		if (args->scalarOutputCount > 0) {
 +			args->scalarOutput[0] = 0x1000;
 +		}
 +		break;
-+	case 12: /* Set Surface */
-+	case 14: /* Get Surface */
-+	case 17: /* Sync Token */
-+	case 20: /* Flush Pipeline */
++	case 12:
++	case 14:
++	case 17:
++	case 20:
 +	default:
 +		break;
 +	}
