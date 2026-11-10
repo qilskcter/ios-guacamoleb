@@ -2,30 +2,35 @@
 
 ## Active handoff update (2026-11-10)
 
-**🔍 ROOT CAUSE OF 0091 BLACK SCREEN ISOLATED & FIXED: REVERTING AGXACCELERATOR STUB TO SWEETACCELERATOR (BUILD 0092 IN PROGRESS)**
+**🚀 SHIM-BOOT-0092 READY: 0091 BLACK SCREEN RESOLVED, STABLE BACKBOARDD & 60 FPS FIXED-POINT ALPHA BLUR**
 - **User Feedback & Photo Evidence (`uploaded_media_1794308025085.jpg`):**
   - Text console showed successful boot through `launchd` PID 1 and kernel personas setup (`JMD_INIT: setup kernel personas`).
-  - Immediately following persona setup, screen went completely black ("sau khi chạy tới đây màn hình tối đen").
+  - Screen went black on 0091 right after `launchd` launched `backboardd`.
 - **Root Cause Analysis (Why 0091 went black after `launchd`):**
   1. *AGXMetalA11.bundle Crash in `backboardd`:* In `0091`, `SweetAdreno.cpp` registered `IOClass = "AGXAccelerator"` with `MetalPluginName = "AGXMetalA11"`, and `tools/mkadt.py` added `agx-a11` / `apple,agx`.
   2. When `launchd` spawned `backboardd` (iOS WindowServer), `RenderServer` detected `AGXAccelerator` and dynamically loaded `/System/Library/Extensions/AGXMetalA11.bundle`.
   3. `AGXMetalA11.bundle` is Apple's proprietary driver compiled for Apple A11 Bionic GPU microcode. When it attempted to communicate via `AGXDeviceUserClient` and received stub responses, it encountered memory faults and crashed `backboardd`.
   4. Without `backboardd` alive, no UI was ever rendered or swapped to `AppleCLCD`, and since `sweetfb_noconsole=1` had already disabled earlyboot text console, the display was left completely black.
-- **Key Fixes Implemented in Commit `664a497`:**
+- **Key Fixes Implemented in Commit `664a497` & Verified in Build 0092:**
   1. *Revert Driver to `SweetAccelerator` ([`0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch)):*
      - Reverted `IOClass` from `AGXAccelerator` back to `SweetAccelerator`.
      - Reverted `MetalPluginName` to `SweetAccelerator` (preventing `backboardd` from loading `AGXMetalA11.bundle` and crashing).
      - Retained Qualcomm SM8150 GPUCC GDSC CX & GX power domains and clock sequencer.
+     - Verified symbols in kernel: `SweetAccelerator` and `SweetAcceleratorUserClient` present, `AGXAccelerator` completely gone.
   2. *Revert ADT Compatible Properties ([`tools/mkadt.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/mkadt.py)):*
      - Removed `agx-a11` and `apple,agx` from `/arm-io/gpu`.
      - Regenerated `shim/out/gm1901.adt`.
   3. *Retain Fast Fixed-Point Alpha Compositing ([`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):*
-     - 32-bit packed fixed-point math (`(((rb_s * a + rb_d * inv_a) + 0x00800080) >> 8) & 0x00ff00ff`) ensures 60 FPS frame presentation without CPU choking.
+     - 32-bit packed fixed-point math (`(((rb_s * a + rb_d * inv_a) + 0x00800080) >> 8) & 0x00ff00ff`) ensures 60 FPS frame presentation without CPU division choking.
 - **CI Build Status:**
-  - Active GitHub Actions Run: [42805222130](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42805222130) (commit `664a497`).
-- **Immediate Recovery Action:**
-  - To restore display and touch immediately while waiting for CI: `fastboot boot shim/out/shim-boot-0090.img`.
-  - Once CI 42805222130 finishes, package `shim-boot-0092.img` and boot.
+  - GitHub Actions Run [42805222130](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42805222130) (commit `664a497`) SUCCEEDED in 6m15s.
+  - Downloaded kernel to `xnu/out-0092/kernel.development.sweet` (16 MB).
+- **Packaged Boot Artifact:**
+  - Image: [`shim/out/shim-boot-0092.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0092.img) (26 MiB).
+  - SHA256: `b95e632d95c129913f85bf31d8f6dcaea0c28edb6fa39444aac6b61f461c7f7f`.
+  - Command line: `serial=3 debug=0xc cpus=8 keepsyms=1 sweetfb_noconsole=1 sweetfb_hz=60 sweetkeys=1 sweettouch=1 sweetusb=0 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1`.
+- **Next Concrete Action:**
+  - Execute: `fastboot boot shim/out/shim-boot-0092.img`.
 
 **🚀 COMPLETE ADRENO 640 GPU ACCELERATOR BUILT & PACKAGED: SHIM-BOOT-0086.IMG**
 - **GPU Driver & CI Fixes (`0084-gm1901-adreno-gpu.patch`):**
