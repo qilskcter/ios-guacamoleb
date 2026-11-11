@@ -72,14 +72,14 @@ index 3decbf0..a114993 100644
 +		*d++ = *s++;
 +		len -= 8;
 +	}
-+	if (len >= 4) {
-+		*(uint32_t *)d = *(const uint32_t *)(const void *)s;
-+		d = (uint64_t *)((uint8_t *)d + 4);
-+		s = (const uint64_t *)(const void *)((const uint8_t *)s + 4);
-+		len -= 4;
-+	}
 +	uint8_t *d8 = (uint8_t *)d;
 +	const uint8_t *s8 = (const uint8_t *)s;
++	if (len >= 4) {
++		*(uint32_t *)(void *)d8 = *(const uint32_t *)(const void *)s8;
++		d8 += 4;
++		s8 += 4;
++		len -= 4;
++	}
 +	while (len--) {
 +		*d8++ = *s8++;
 +	}

@@ -117,11 +117,9 @@
 +	if (pmap == NULL) {
 +		return;
 +	}
-+	(void)sweet_patch_user_insn(pmap, 0x18831580cULL + slide,
-+	    0x1a9f07e8U, 0x52800008U);
-+	bool ok2 = sweet_patch_user_insn(pmap, 0x188315a74ULL + slide,
++	bool ok = sweet_patch_user_insn(pmap, 0x188315a74ULL + slide,
 +	    0x540004aaU, 0x14000025U);
-+	if (ok2) {
++	if (ok) {
 +		IOLog("SWEET QC: backdrop blur & fast downsample fixup applied (slide 0x%llx)\n", slide);
 +	}
 +}

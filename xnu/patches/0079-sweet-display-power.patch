@@ -36,7 +36,7 @@
  	}
 +	if (fb->fPowerOff) {
 +		if (fb->fPixels && fb->fDirty) {
-+			bzero((void *)fb->fPixels, SWEET_FB_BYTES);
++			bzero((void *)fb->fPixels, (size_t)fb->fRowBytes * fb->fHeight);
 +			fb->fDirty = false;
 +		}
 +		IOLockUnlock(fb->fLock);
@@ -59,7 +59,7 @@
 +				fFB->fFadeStep = 0;
 +				fFB->fDirty = true;     /* on: redraw the latest frame */
 +				if (off && fFB->fPixels) {
-+					bzero((void *)fFB->fPixels, SWEET_FB_BYTES);
++					bzero((void *)fFB->fPixels, (size_t)fFB->fRowBytes * fFB->fHeight);
 +				}
 +			}
 +			IOLockUnlock(fFB->fLock);
