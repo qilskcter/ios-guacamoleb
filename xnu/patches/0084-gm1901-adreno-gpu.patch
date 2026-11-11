@@ -24,7 +24,7 @@
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,414 @@
+@@ -0,0 +1,412 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
