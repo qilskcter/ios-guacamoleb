@@ -24,7 +24,7 @@
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,415 @@
+@@ -0,0 +1,414 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
@@ -218,10 +218,6 @@
 +	};
 +	for (int d = 0; d < 4; d++) {
 +		uintptr_t dom = osm_base + dom_offsets[d];
-+		uint32_t en = *(volatile uint32_t *)(dom + OSM_REG_ENABLE);
-+		if (!(en & 1U)) {
-+			continue;
-+		}
 +		uint32_t max_idx = 0;
 +		uint32_t prev_lval = 0, prev_src = 0;
 +		uint32_t max_lval = 0;
@@ -240,14 +236,17 @@
 +			prev_lval = lval;
 +			prev_src = src;
 +		}
-+		if (max_idx > 0) {
-+			uint32_t old_idx = *(volatile uint32_t *)(dom + OSM_REG_PERF_DESIRED);
-+			*(volatile uint32_t *)(dom + OSM_REG_PERF_DESIRED) = max_idx;
-+			(void)*(volatile uint32_t *)(dom + OSM_REG_ENABLE);
-+			__asm__ volatile("dsb sy" ::: "memory");
-+			IOLog("SWEET CPU: %s OSM idx %u -> %u (~%u MHz)\n",
-+			    dom_names[d], old_idx & 0x3fU, max_idx, (max_lval * 192U) / 10U);
++		if (max_idx == 0) {
++			/* Fallback OPP: Silver idx 14 (~1.78 GHz), Gold/Prime/L3 idx 15 (~2.42-2.84 GHz) */
++			max_idx = (d == 1) ? 14 : 15;
++			max_lval = (d == 1) ? 93 : 148;
 +		}
++		uint32_t old_idx = *(volatile uint32_t *)(dom + OSM_REG_PERF_DESIRED);
++		*(volatile uint32_t *)(dom + OSM_REG_PERF_DESIRED) = max_idx;
++		__asm__ volatile("dsb sy" ::: "memory");
++		uint32_t readback = *(volatile uint32_t *)(dom + OSM_REG_PERF_DESIRED);
++		IOLog("SWEET CPU: %s OSM idx %u -> %u (readback %u, ~%u MHz)\n",
++		    dom_names[d], old_idx & 0x3fU, max_idx, readback & 0x3fU, (max_lval * 192U) / 10U);
 +	}
 +}
 +
