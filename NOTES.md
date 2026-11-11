@@ -1,5 +1,33 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
+## Active handoff update (2026-11-12)
+
+**🚀 SHIM-BOOT-0098 BUILT, PACKAGED & LIVE BOOTED: OFFICIAL IOS 16 WALLPAPER EMBEDDED IN KERNEL + DOCK/APP-LIBRARY FROSTED GLASS BLUR RESTORED**
+- **User Feedback & Request:**
+  - "tôi muốn hiển thị hình nền trên máy tôi thay vì màn hình đen" (Wants wallpaper displayed instead of pitch black background).
+- **Root Cause Identified:**
+  - iOS 16 decoupled wallpapers from legacy `.cpbitmap` into `PosterBoard.app` (`/Applications/PosterBoard.app`, managed by RunningBoard).
+  - In our bring-up environment, `/System/Library/LaunchAngels/com.apple.PosterBoard.plist` has `RunAtLoad = false` and `_ExperimentalNonLaunching = true`.
+  - Because Setup Assistant was bypassed and PosterBoard lacks active poster session descriptors in `PRBPosterExtensionDataStoreSQLiteDatabase.sqlite3`, SpringBoard renders a plain black fallback canvas on Layer 0.
+  - When `com.apple.posterboardservices.services` is unreachable, `Preferences.app` hides the Wallpaper pane completely.
+- **Resolution in `0098` (Commits `ae9194e`, `a8bf55e`, `38eda49`, `3eb6ae3`):**
+  1. **Official iOS 16 Wallpaper Ingestion & Fast LZ4 Compression:**
+     - Extracted authentic 1080x2340 BGRA iOS 16 wallpaper (10,108,800 bytes) and compressed to 1,617,644 bytes (~1.54 MiB) as [`xnu/patches/wallpaper.lz4`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/wallpaper.lz4).
+     - Embedded into kernel binary using `__asm__(".incbin \"wallpaper.lz4\"")` with a standalone C LZ4 decompressor in [`xnu/patches/0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch).
+  2. **Multi-Directory Include Staging ([`xnu/patches/0085-stage-wallpaper.sh`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0085-stage-wallpaper.sh)):**
+     - Staged `wallpaper.lz4` across all compiler include search paths (`EXTERNAL_HEADERS`, `osfmk`, `bsd`, `libkern`, `iokit/Kernel/arm`, source root) to resolve Clang `.incbin` path resolution.
+  3. **Kernel Layer 0 Presentation & Backdrop Texture Injection:**
+     - In `AppleCLCD::start`, decompresses the 10,108,800-byte wallpaper in < 5 ms into `sweet_wallpaper_pixels`.
+     - In `AppleCLCD::present`, probes 4 key pixels on Layer 0. If all black (SpringBoard empty wallpaper surface), directly injects `sweet_wallpaper_pixels` into `dstRow` and updates `layer0_surf` so `CABackdropLayer` (Dock, App Library, Control Center) samples the real wallpaper texture for authentic frosted glass blur. Fullscreen applications rendering non-zero pixels pass through untouched.
+- **CI Build & Packaged Boot Artifact:**
+  - GitHub Actions Run [43070486013](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43070486013) (commit `3eb6ae3`) SUCCEEDED in 6m42s.
+  - Downloaded kernel to [`xnu/out-0098/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0098/kernel.development.sweet) (18 MiB, verified `__ZL22sweet_wallpaper_pixels` at `0xfffffe00081f9e58` and `__ZL20sweet_lz4_decompressPKhmPhm` at `0xfffffe0007bf12b0`).
+  - Image: [`shim/out/shim-boot-0098.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0098.img) (27 MiB, `--highmem` ADT `phys_base = 0x100000000`).
+  - SHA256: `73fdc8e21516fd7a37bbb7f991dcb647cfe09ee8554ecb684d44b2082cd72822`.
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0098.img`:
+    - `Sending 'boot.img' (27884 KB) OKAY [0.710s]`
+    - `Booting OKAY`
+
 ## Active handoff update (2026-11-11)
 
 **🚀 SHIM-BOOT-0097 BUILT, PACKAGED & LIVE BOOTED: POWER BUTTON DEBOUNCER + PITCH-BLACK OLED SCREEN OFF + SINGLE-SHOT QUARTZCORE FIXUP (I-CACHE ZERO-STALL)**
