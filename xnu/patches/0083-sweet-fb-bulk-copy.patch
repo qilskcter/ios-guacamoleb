@@ -1,5 +1,5 @@
 diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
-index 3decbf0..b04936b 100644
+index 3decbf0..a114993 100644
 --- a/iokit/Kernel/arm/SweetFramebuffer.cpp
 +++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
 @@ -191,7 +191,7 @@ AppleCLCD::start(IOService *provider)
@@ -11,35 +11,7 @@ index 3decbf0..b04936b 100644
  	PE_parse_boot_argn("sweetfb_hz", &hz, sizeof(hz));
  	fFlushTicks = (hz == 0 || hz >= 60) ? 1 : 60 / hz;
  	fVsync->setTimeoutUS(SWEET_FB_VSYNC_US);
-@@ -229,20 +229,18 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
- 		return;
- 	}
- 	bool flush = fb->fDirty && (count % fb->fFlushTicks) == 0;
--	uint8_t *rec = NULL;
-+	uint8_t rec[SWEET_FB_SWAP_REC_SIZE];
-+	bool do_present = false;
- 	if (flush) {
--		rec = (uint8_t *)IOMallocData(SWEET_FB_SWAP_REC_SIZE);
--		if (rec != NULL) {
--			memcpy(rec, fb->fPending, SWEET_FB_SWAP_REC_SIZE);
--			fb->fDirty = false;
--		}
-+		memcpy(rec, fb->fPending, SWEET_FB_SWAP_REC_SIZE);
-+		fb->fDirty = false;
-+		do_present = true;
- 	}
- 	IOLockUnlock(fb->fLock);
--	if (rec != NULL) {
-+	sender->setTimeoutUS(SWEET_FB_VSYNC_US);
-+	if (do_present) {
- 		fb->present(rec);
--		IOFreeData(rec, SWEET_FB_SWAP_REC_SIZE);
- 	}
--	sender->setTimeoutUS(SWEET_FB_VSYNC_US);
- }
- 
- void
-@@ -285,15 +283,62 @@ static uint64_t sweet_fb_swap_count;
+@@ -285,15 +285,75 @@ static uint64_t sweet_fb_swap_count;
  void
  AppleCLCD::swap(const uint8_t *rec)
  {
@@ -60,50 +32,63 @@ index 3decbf0..b04936b 100644
 +sweet_fast_copy_row(uint8_t *dst, const uint8_t *src, size_t len)
 +{
 +	size_t n = len / 64;
-+	const uint8_t *s = src;
-+	uint8_t *d = dst;
++	const uint64_t *s = (const uint64_t *)(const void *)src;
++	uint64_t *d = (uint64_t *)(void *)dst;
 +
 +	while (n--) {
-+		__asm__ volatile(
-+			"ldp q0, q1, [%0], #32\n"
-+			"ldp q2, q3, [%0], #32\n"
-+			"stp q0, q1, [%1], #32\n"
-+			"stp q2, q3, [%1], #32\n"
-+			: "+r"(s), "+r"(d)
-+			:
-+			: "q0", "q1", "q2", "q3", "memory"
-+		);
++		uint64_t a = s[0];
++		uint64_t b = s[1];
++		uint64_t c = s[2];
++		uint64_t d0 = s[3];
++		uint64_t e = s[4];
++		uint64_t f = s[5];
++		uint64_t g = s[6];
++		uint64_t h = s[7];
++		d[0] = a; d[1] = b; d[2] = c; d[3] = d0;
++		d[4] = e; d[5] = f; d[6] = g; d[7] = h;
++		s += 8;
++		d += 8;
 +	}
 +	len &= 63;
 +	if (len >= 32) {
-+		__asm__ volatile(
-+			"ldp q0, q1, [%0], #32\n"
-+			"stp q0, q1, [%1], #32\n"
-+			: "+r"(s), "+r"(d)
-+			:
-+			: "q0", "q1", "memory"
-+		);
++		uint64_t a = s[0];
++		uint64_t b = s[1];
++		uint64_t c = s[2];
++		uint64_t d0 = s[3];
++		d[0] = a; d[1] = b; d[2] = c; d[3] = d0;
++		s += 4;
++		d += 4;
 +		len -= 32;
 +	}
 +	if (len >= 16) {
-+		__asm__ volatile(
-+			"ldr q0, [%0], #16\n"
-+			"str q0, [%1], #16\n"
-+			: "+r"(s), "+r"(d)
-+			:
-+			: "q0", "memory"
-+		);
++		uint64_t a = s[0];
++		uint64_t b = s[1];
++		d[0] = a; d[1] = b;
++		s += 2;
++		d += 2;
 +		len -= 16;
 +	}
-+	while (len--) {
++	if (len >= 8) {
 +		*d++ = *s++;
++		len -= 8;
++	}
++	if (len >= 4) {
++		*(uint32_t *)d = *(const uint32_t *)(const void *)s;
++		d = (uint64_t *)((uint8_t *)d + 4);
++		s = (const uint64_t *)(const void *)((const uint8_t *)s + 4);
++		len -= 4;
++	}
++	uint8_t *d8 = (uint8_t *)d;
++	const uint8_t *s8 = (const uint8_t *)s;
++	while (len--) {
++		*d8++ = *s8++;
 +	}
 +}
 +
  void
  AppleCLCD::present(const uint8_t *rec)
  {
-@@ -310,6 +355,7 @@ AppleCLCD::present(const uint8_t *rec)
+@@ -310,6 +370,7 @@ AppleCLCD::present(const uint8_t *rec)
  		}
  	}
  
@@ -111,7 +96,7 @@ index 3decbf0..b04936b 100644
  	for (uint32_t layer = 0; layer < SWEET_FB_LAYERS; layer++) {
  		uint32_t id = get32(rec, 0x54 + 4 * layer);
  		const uint8_t *a = rec + 0x64 + 16 * layer;
-@@ -377,14 +423,73 @@ AppleCLCD::present(const uint8_t *rec)
+@@ -377,14 +438,73 @@ AppleCLCD::present(const uint8_t *rec)
  			src = 0;
  		}
  		if (src != 0 && bpe == 4) {
@@ -143,19 +128,19 @@ index 3decbf0..b04936b 100644
 +				uint32_t copy_w = ((uint32_t)(dx + w) > fWidth) ? (fWidth > (uint32_t)dx ? fWidth - (uint32_t)dx : 0) : (uint32_t)w;
 +				uintptr_t l0_base = (layer0_surf != NULL) ? layer0_surf->kernelAddress() : 0;
 +				for (uint32_t y = 0; y < copy_h; y++) {
-+					const uint32_t *sp = (const uint32_t *)srcRow;
-+					uint32_t *dp = (uint32_t *)dstRow;
++					const uint32_t *sp = (const uint32_t *)(const void *)srcRow;
++					uint32_t *dp = (uint32_t *)(void *)dstRow;
 +					const uint32_t *l0p = NULL;
 +					if (l0_base != 0 && (uint32_t)(dy + y) < layer0_surf->height &&
 +					    (uint32_t)(dx + copy_w) <= layer0_surf->width) {
-+						l0p = (const uint32_t *)(l0_base + layer0_surf->offset +
++						l0p = (const uint32_t *)(const void *)(l0_base + layer0_surf->offset +
 +						    (uint64_t)(dy + y) * layer0_surf->bytesPerRow + (uint64_t)dx * 4);
 +					}
 +					uint32_t x = 0;
 +					while (x < copy_w) {
 +						if (x + 4 <= copy_w) {
-+							uint64_t w0 = *(const uint64_t *)&sp[x];
-+							uint64_t w1 = *(const uint64_t *)&sp[x + 2];
++							uint64_t w0 = *(const uint64_t *)(const void *)&sp[x];
++							uint64_t w1 = *(const uint64_t *)(const void *)&sp[x + 2];
 +							if ((w0 | w1) == 0) {
 +								x += 4;
 +								continue;
@@ -189,7 +174,7 @@ index 3decbf0..b04936b 100644
  }
  
  bool
-@@ -456,6 +561,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
+@@ -456,6 +576,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
  }
  
  static uint64_t sweet_fb_logged;        /* selectors already logged (< 64) */
@@ -197,7 +182,7 @@ index 3decbf0..b04936b 100644
  
  IOReturn
  IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-@@ -472,6 +578,7 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -472,6 +593,7 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
  		outCount = 1;
  		break;
  	case kSweetFBSwapBegin:
