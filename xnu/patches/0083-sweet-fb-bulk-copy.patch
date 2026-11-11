@@ -1,8 +1,8 @@
 diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
-index 3decbf0..a114993 100644
+index d997c77..fd76e58 100644
 --- a/iokit/Kernel/arm/SweetFramebuffer.cpp
 +++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
-@@ -191,7 +191,7 @@ AppleCLCD::start(IOService *provider)
+@@ -191,10 +191,18 @@ AppleCLCD::start(IOService *provider)
  		IOLog("SWEET FB: no vsync timer\n");
  		return false;
  	}
@@ -11,7 +11,18 @@ index 3decbf0..a114993 100644
  	PE_parse_boot_argn("sweetfb_hz", &hz, sizeof(hz));
  	fFlushTicks = (hz == 0 || hz >= 60) ? 1 : 60 / hz;
  	fVsync->setTimeoutUS(SWEET_FB_VSYNC_US);
-@@ -285,15 +285,75 @@ static uint64_t sweet_fb_swap_count;
++	if (sweet_wallpaper_pixels == NULL) {
++		sweet_wallpaper_pixels = (uint8_t *)IOMallocData(10108800);
++		if (sweet_wallpaper_pixels != NULL) {
++			sweet_lz4_decompress(sweet_wallpaper_comp, sweet_wallpaper_comp_len,
++			    sweet_wallpaper_pixels, 10108800);
++			IOLog("SWEET FB: loaded iOS 16 wallpaper (10108800 bytes)\n");
++		}
++	}
+ 
+ 	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
+ 	setProperty("external", false);
+@@ -289,15 +297,134 @@ static uint64_t sweet_fb_swap_count;
  void
  AppleCLCD::swap(const uint8_t *rec)
  {
@@ -28,6 +39,65 @@ index 3decbf0..a114993 100644
  	}
  }
  
++__asm__(
++".section __TEXT,__const\n"
++".global _sweet_wallpaper_comp\n"
++".global _sweet_wallpaper_comp_len\n"
++".p2align 2\n"
++"_sweet_wallpaper_comp:\n"
++".incbin \"wallpaper.lz4\"\n"
++"_sweet_wallpaper_comp_len:\n"
++".long 1617644\n"
++);
++
++extern "C" const uint8_t sweet_wallpaper_comp[];
++extern "C" const uint32_t sweet_wallpaper_comp_len;
++static uint8_t *sweet_wallpaper_pixels = NULL;
++
++static int
++sweet_lz4_decompress(const uint8_t *src, size_t src_len, uint8_t *dst, size_t dst_len)
++{
++	const uint8_t *src_end = src + src_len;
++	uint8_t *dst_orig = dst;
++	uint8_t *dst_end = dst + dst_len;
++
++	while (src < src_end) {
++		uint8_t token = *src++;
++		size_t lit_len = token >> 4;
++		if (lit_len == 15) {
++			uint8_t s;
++			do {
++				if (src >= src_end) return -1;
++				s = *src++;
++				lit_len += s;
++			} while (s == 255);
++		}
++		if (dst + lit_len > dst_end || src + lit_len > src_end) return -1;
++		memcpy(dst, src, lit_len);
++		dst += lit_len;
++		src += lit_len;
++		if (src >= src_end) break;
++		uint16_t offset = (uint16_t)src[0] | ((uint16_t)src[1] << 8);
++		src += 2;
++		if (offset == 0) return -1;
++		size_t match_len = (token & 0x0f) + 4;
++		if (match_len == 19) {
++			uint8_t s;
++			do {
++				if (src >= src_end) return -1;
++				s = *src++;
++				match_len += s;
++			} while (s == 255);
++		}
++		const uint8_t *match = dst - offset;
++		if (match < dst_orig || dst + match_len > dst_end) return -1;
++		while (match_len--) {
++			*dst++ = *match++;
++		}
++	}
++	return (int)(dst - dst_orig);
++}
++
 +static inline void
 +sweet_fast_copy_row(uint8_t *dst, const uint8_t *src, size_t len)
 +{
@@ -88,7 +158,7 @@ index 3decbf0..a114993 100644
  void
  AppleCLCD::present(const uint8_t *rec)
  {
-@@ -310,6 +370,7 @@ AppleCLCD::present(const uint8_t *rec)
+@@ -314,6 +441,7 @@ AppleCLCD::present(const uint8_t *rec)
  		}
  	}
  
@@ -96,7 +166,7 @@ index 3decbf0..a114993 100644
  	for (uint32_t layer = 0; layer < SWEET_FB_LAYERS; layer++) {
  		uint32_t id = get32(rec, 0x54 + 4 * layer);
  		const uint8_t *a = rec + 0x64 + 16 * layer;
-@@ -377,14 +438,73 @@ AppleCLCD::present(const uint8_t *rec)
+@@ -381,14 +509,87 @@ AppleCLCD::present(const uint8_t *rec)
  			src = 0;
  		}
  		if (src != 0 && bpe == 4) {
@@ -114,7 +184,21 @@ index 3decbf0..a114993 100644
 +					s->retain();
 +					layer0_surf = s;
 +				}
-+				if (sx == 0 && dx == 0 && rowBytesToCopy == fRowBytes && s->bytesPerRow == fRowBytes) {
++				bool is_empty_backdrop = false;
++				if (sweet_wallpaper_pixels != NULL && src != 0 && s->bytesPerRow == fRowBytes) {
++					const uint32_t *p0 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)50 * s->bytesPerRow + (uint64_t)540 * 4);
++					const uint32_t *p1 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)500 * s->bytesPerRow + (uint64_t)540 * 4);
++					const uint32_t *p2 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)1170 * s->bytesPerRow + (uint64_t)540 * 4);
++					const uint32_t *p3 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)2000 * s->bytesPerRow + (uint64_t)540 * 4);
++					if ((*p0 & 0x00ffffff) == 0 && (*p1 & 0x00ffffff) == 0 &&
++					    (*p2 & 0x00ffffff) == 0 && (*p3 & 0x00ffffff) == 0) {
++						is_empty_backdrop = true;
++					}
++				}
++				if (is_empty_backdrop) {
++					bcopy(sweet_wallpaper_pixels, dstRow, (size_t)copy_h * fRowBytes);
++					bcopy(sweet_wallpaper_pixels, (void *)(src + s->offset), (size_t)copy_h * fRowBytes);
++				} else if (sx == 0 && dx == 0 && rowBytesToCopy == fRowBytes && s->bytesPerRow == fRowBytes) {
 +					bcopy(srcRow, dstRow, (size_t)copy_h * fRowBytes);
 +				} else {
 +					for (uint32_t y = 0; y < copy_h; y++) {
@@ -174,7 +258,7 @@ index 3decbf0..a114993 100644
  }
  
  bool
-@@ -456,6 +576,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
+@@ -460,6 +661,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
  }
  
  static uint64_t sweet_fb_logged;        /* selectors already logged (< 64) */
@@ -182,7 +266,7 @@ index 3decbf0..a114993 100644
  
  IOReturn
  IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-@@ -472,6 +593,7 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -476,6 +678,7 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
  		outCount = 1;
  		break;
  	case kSweetFBSwapBegin:
