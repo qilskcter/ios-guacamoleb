@@ -2,6 +2,28 @@
 
 ## Active handoff update (2026-11-11)
 
+**🚀 SHIM-BOOT-0097 BUILT, PACKAGED & LIVE BOOTED: POWER BUTTON DEBOUNCER + PITCH-BLACK OLED SCREEN OFF + SINGLE-SHOT QUARTZCORE FIXUP (I-CACHE ZERO-STALL)**
+- **User Feedback on `0096`:**
+  - "app library vẫn bị nền trắng, màn hình khi bấm tắt thì nó hiện lại màn hình khoá, hiệu ứng mượt hơn một chút nhưng vẫn còn lag, kéo control center vẫn lag"
+- **Root Causes Identified & Resolved in `0097` (Commits `8566a53`, `223cc4f`, `d0718cf`, `f90fc24`):**
+  1. **Power Button Mechanical Chatter / Re-wake on Screen Off ([`0082-gm1901-drivers.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0082-gm1901-drivers.patch)):**
+     - Mechanical release flutter generated extra key pulses within 20–50 ms. SpringBoard interpreted this as a fresh power press and immediately woke the device back up to the Lock Screen.
+     - **Fix:** Implemented a 3-cycle (60 ms) digital debouncer (`keys_raw`, `keys_stable`) requiring 3 consecutive identical samples to confirm state transition, plus a 300 ms post-release lockout (`power_lockout = 15`) ignoring any bounce pulses.
+  2. **OLED Panel Blanking on Screen Off ([`0079-sweet-display-power.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0079-sweet-display-power.patch)):**
+     - Framebuffer was not cleared when `kSweetFBRequestPowerChange` turned display off, leaving previous frame displayed on the AMOLED panel.
+     - **Fix:** Added `bzero((void *)fFB->fPixels, (size_t)fFB->fRowBytes * fFB->fHeight)` on power-off and in `vsyncFired` when `fPowerOff && fDirty` to guarantee true pitch-black OLED pixels.
+  3. **QuartzCore Single-Shot Fixup & Layer Blending ([`0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch) & [`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):**
+     - In `0096`, `sweet_fixup_quartzcore` ran on every swap begin and called `ic ialluis` (inner-shareable I-cache invalidation) on all 8 Kryo CPU cores 60 times/sec, causing severe CPU pipeline stalls and animation/Control Center stutter.
+     - **Fix:** Converted `sweet_fixup_quartzcore` to single-shot (`sweet_qc_attempted = 1`), eliminating per-frame I-cache flushes completely. Also fixed layer compositing so Layer 2+ blends on top of Layer 1 backdrop.
+- **CI Build & Packaged Boot Artifact:**
+  - GitHub Actions Run [43006610729](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43006610729) (commit `f90fc24`) SUCCEEDED in 6m21s.
+  - Downloaded kernel to [`xnu/out-0097/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0097/kernel.development.sweet) (verified `_sweet_fixup_quartzcore` at `0xfffffe0007a675b8` and `_keys_thread` at `0xfffffe00074ea728`).
+  - Image: [`shim/out/shim-boot-0097.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0097.img) (26 MiB, `--highmem` ADT `phys_base = 0x100000000`).
+  - SHA256: `419075692756a6a3048aed00a543636639c7e1cb0d35ca7fee67031c5780a66d`.
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0097.img`.
+- **Note on App Library Background:**
+  - iOS defaults to Light Mode (`UIUserInterfaceStyleLight`), where SpringBoard/CoreMaterial renders App Library with `MTMaterialRecipeLibrary` (solid light-gray / off-white background). To switch to dark frosted blur, user can toggle **Cài đặt -> Màn hình & Độ sáng -> Tối (Dark)**.
+
 **🚀 SHIM-BOOT-0096 BUILT, PACKAGED & LIVE BOOTED: NATIVE SCREEN-OFF FADE RESTORED + SM8150 KRYO 2.84 GHz UNLOCKED + 4-PIXEL TRANSPARENT SKIP + UNROLLED 64-BIT COPY**
 - **User Feedback on `0095`:**
   - "vẫn còn lag, hiệu ứng tắt màn hình cũng k có, tất cả animation đều lag" (All animations still laggy, screen turn-off effect missing).
