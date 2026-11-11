@@ -1,43 +1,10 @@
 diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
-index d997c77..fd76e58 100644
+index d997c77..2c54345 100644
 --- a/iokit/Kernel/arm/SweetFramebuffer.cpp
 +++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
-@@ -191,10 +191,18 @@ AppleCLCD::start(IOService *provider)
- 		IOLog("SWEET FB: no vsync timer\n");
- 		return false;
- 	}
--	uint32_t hz = 10;
-+	uint32_t hz = 60;
- 	PE_parse_boot_argn("sweetfb_hz", &hz, sizeof(hz));
- 	fFlushTicks = (hz == 0 || hz >= 60) ? 1 : 60 / hz;
- 	fVsync->setTimeoutUS(SWEET_FB_VSYNC_US);
-+	if (sweet_wallpaper_pixels == NULL) {
-+		sweet_wallpaper_pixels = (uint8_t *)IOMallocData(10108800);
-+		if (sweet_wallpaper_pixels != NULL) {
-+			sweet_lz4_decompress(sweet_wallpaper_comp, sweet_wallpaper_comp_len,
-+			    sweet_wallpaper_pixels, 10108800);
-+			IOLog("SWEET FB: loaded iOS 16 wallpaper (10108800 bytes)\n");
-+		}
-+	}
+@@ -148,6 +148,65 @@ public:
  
- 	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
- 	setProperty("external", false);
-@@ -289,15 +297,134 @@ static uint64_t sweet_fb_swap_count;
- void
- AppleCLCD::swap(const uint8_t *rec)
- {
-+	uint8_t local_rec[SWEET_FB_SWAP_REC_SIZE];
- 	IOLockLock(fLock);
- 	memcpy(fPending, rec, SWEET_FB_SWAP_REC_SIZE);
--	fDirty = true;
-+	memcpy(local_rec, rec, SWEET_FB_SWAP_REC_SIZE);
-+	fDirty = false;
- 	IOLockUnlock(fLock);
-+	present(local_rec);
- 	if ((++sweet_fb_swap_count % 1000) == 0) {
- 		IOLog("SWEET FB: %llu swaps\n", sweet_fb_swap_count);
- 	}
- }
+ OSDefineMetaClassAndStructors(IOMobileFramebufferUserClient, IOUserClient);
  
 +__asm__(
 +".section __TEXT,__const\n"
@@ -77,7 +44,7 @@ index d997c77..fd76e58 100644
 +		dst += lit_len;
 +		src += lit_len;
 +		if (src >= src_end) break;
-+		uint16_t offset = (uint16_t)src[0] | ((uint16_t)src[1] << 8);
++		uint16_t offset = (uint16_t)((uint16_t)src[0] | ((uint16_t)src[1] << 8));
 +		src += 2;
 +		if (offset == 0) return -1;
 +		size_t match_len = (token & 0x0f) + 4;
@@ -98,6 +65,46 @@ index d997c77..fd76e58 100644
 +	return (int)(dst - dst_orig);
 +}
 +
+ bool
+ AppleCLCD::start(IOService *provider)
+ {
+@@ -191,10 +250,18 @@ AppleCLCD::start(IOService *provider)
+ 		IOLog("SWEET FB: no vsync timer\n");
+ 		return false;
+ 	}
+-	uint32_t hz = 10;
++	uint32_t hz = 60;
+ 	PE_parse_boot_argn("sweetfb_hz", &hz, sizeof(hz));
+ 	fFlushTicks = (hz == 0 || hz >= 60) ? 1 : 60 / hz;
+ 	fVsync->setTimeoutUS(SWEET_FB_VSYNC_US);
++	if (sweet_wallpaper_pixels == NULL) {
++		sweet_wallpaper_pixels = (uint8_t *)IOMallocData(10108800);
++		if (sweet_wallpaper_pixels != NULL) {
++			sweet_lz4_decompress(sweet_wallpaper_comp, sweet_wallpaper_comp_len,
++			    sweet_wallpaper_pixels, 10108800);
++			IOLog("SWEET FB: loaded iOS 16 wallpaper (10108800 bytes)\n");
++		}
++	}
+ 
+ 	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
+ 	setProperty("external", false);
+@@ -289,15 +356,75 @@ static uint64_t sweet_fb_swap_count;
+ void
+ AppleCLCD::swap(const uint8_t *rec)
+ {
++	uint8_t local_rec[SWEET_FB_SWAP_REC_SIZE];
+ 	IOLockLock(fLock);
+ 	memcpy(fPending, rec, SWEET_FB_SWAP_REC_SIZE);
+-	fDirty = true;
++	memcpy(local_rec, rec, SWEET_FB_SWAP_REC_SIZE);
++	fDirty = false;
+ 	IOLockUnlock(fLock);
++	present(local_rec);
+ 	if ((++sweet_fb_swap_count % 1000) == 0) {
+ 		IOLog("SWEET FB: %llu swaps\n", sweet_fb_swap_count);
+ 	}
+ }
+ 
 +static inline void
 +sweet_fast_copy_row(uint8_t *dst, const uint8_t *src, size_t len)
 +{
