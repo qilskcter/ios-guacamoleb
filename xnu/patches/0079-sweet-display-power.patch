@@ -30,11 +30,15 @@
  
  	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
  	void addClient(IOMobileFramebufferUserClient *client);
-@@ -216,6 +223,11 @@
+@@ -216,6 +223,15 @@
  		    (IOMobileFramebufferUserClient *)fb->fClients->getObject(i);
  		client->notify(SWEET_FB_NOTIFY_VSYNC, values, 6);
  	}
 +	if (fb->fPowerOff) {
++		if (fb->fPixels && fb->fDirty) {
++			bzero((void *)fb->fPixels, SWEET_FB_BYTES);
++			fb->fDirty = false;
++		}
 +		IOLockUnlock(fb->fLock);
 +		sender->setTimeoutUS(SWEET_FB_VSYNC_US);
 +		return;
@@ -42,7 +46,7 @@
  	bool flush = fb->fDirty && (count % fb->fFlushTicks) == 0;
  	uint8_t *rec = NULL;
  	if (flush) {
-@@ -506,6 +518,19 @@
+@@ -506,6 +522,22 @@
  			    args->scalarInput[0] ? "on" : "off");
  		}
  		break;
@@ -54,6 +58,9 @@
 +				fFB->fPowerOff = off;
 +				fFB->fFadeStep = 0;
 +				fFB->fDirty = true;     /* on: redraw the latest frame */
++				if (off && fFB->fPixels) {
++					bzero((void *)fFB->fPixels, SWEET_FB_BYTES);
++				}
 +			}
 +			IOLockUnlock(fFB->fLock);
 +			IOLog("SWEET FB: display %s\n", off ? "off" : "on");

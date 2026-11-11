@@ -101,10 +101,11 @@
 +extern "C" void
 +sweet_fixup_quartzcore(task_t task)
 +{
-+	static int sweet_qc_patched = 0;
-+	if (sweet_qc_patched || task == NULL) {
++	static int sweet_qc_attempted = 0;
++	if (sweet_qc_attempted || task == NULL) {
 +		return;
 +	}
++	sweet_qc_attempted = 1;
 +	void *sr = vm_shared_region_get(task);
 +	if (sr == NULL) {
 +		return;
@@ -116,13 +117,12 @@
 +	if (pmap == NULL) {
 +		return;
 +	}
-+	bool ok1 = sweet_patch_user_insn(pmap, 0x18831580cULL + slide,
++	(void)sweet_patch_user_insn(pmap, 0x18831580cULL + slide,
 +	    0x1a9f07e8U, 0x52800008U);
 +	bool ok2 = sweet_patch_user_insn(pmap, 0x188315a74ULL + slide,
 +	    0x540004aaU, 0x14000025U);
-+	if (ok1 && ok2) {
-+		sweet_qc_patched = 1;
-+		IOLog("SWEET QC: backdrop blur & fast sampling fixup applied (slide 0x%llx)\n", slide);
++	if (ok2) {
++		IOLog("SWEET QC: backdrop blur & fast downsample fixup applied (slide 0x%llx)\n", slide);
 +	}
 +}
 +

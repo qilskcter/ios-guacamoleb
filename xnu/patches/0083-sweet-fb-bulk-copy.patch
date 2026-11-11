@@ -126,7 +126,7 @@ index 3decbf0..a114993 100644
 +			} else {
 +				/* Layer > 0 (Backdrop blur, UI overlays, Icons): fast fixed-point alpha-blend into framebuffer */
 +				uint32_t copy_w = ((uint32_t)(dx + w) > fWidth) ? (fWidth > (uint32_t)dx ? fWidth - (uint32_t)dx : 0) : (uint32_t)w;
-+				uintptr_t l0_base = (layer0_surf != NULL) ? layer0_surf->kernelAddress() : 0;
++				uintptr_t l0_base = (layer == 1 && layer0_surf != NULL) ? layer0_surf->kernelAddress() : 0;
 +				for (uint32_t y = 0; y < copy_h; y++) {
 +					const uint32_t *sp = (const uint32_t *)(const void *)srcRow;
 +					uint32_t *dp = (uint32_t *)(void *)dstRow;

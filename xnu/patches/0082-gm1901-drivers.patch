@@ -13,7 +13,7 @@
   * PMIC access is READ ONLY: the sole MMIO write issues EXT_READL on an
   * observer channel. No PMIC config, IRQ acknowledge or reset writes exist.
   */
-@@ -21,11 +25,16 @@
+@@ -21,11 +25,17 @@
  #define KEYS_OBS_PA      0x0e600000u
  #define KEYS_CNFG_PA     0x0c40a000u
  #define KEYS_PON_RT      0x0810u
@@ -32,7 +32,8 @@
  static uint32_t keys_version, keys_last_status;
  static bool keys_started;
  static int keys_sleep_chan;
-@@ -98,23 +107,29 @@
++static int keys_raw[3], keys_stable[3], keys_power_lockout;
+@@ -98,22 +108,47 @@
  	(void)arg;
  	(void)result;
  	for (;;) {
@@ -62,16 +63,36 @@
 +		bool valid[3] = {pok, uok, pok || dok};
  		for (int k = 0; k < 3; ++k) {
 -			if ((k == 1 ? gok : pok) && now[k] != state[k]) {
-+			if (valid[k] && now[k] != state[k]) {
- 				state[k] = now[k];
+-				state[k] = now[k];
 -				printf("SWEET KEYS: key=%d down=%d pon=%#x gpio4:c110=%#x\n",
 -				    k, state[k], pon, gpio);
+-				sweet_hid_key(k, state[k]);
++			if (!valid[k]) continue;
++			if (now[k] != keys_raw[k]) {
++				keys_raw[k] = now[k];
++				keys_stable[k] = 0;
++			} else if (keys_stable[k] < 3) {
++				keys_stable[k]++;
++			}
++			if (keys_stable[k] >= 3 && keys_raw[k] != state[k]) {
++				if (k == 0) {
++					if (keys_raw[0] == 1 && keys_power_lockout > 0) {
++						continue;
++					}
++					if (keys_raw[0] == 0) {
++						keys_power_lockout = 15;
++					}
++				}
++				state[k] = keys_raw[k];
 +				printf("SWEET KEYS: key=%d down=%d pon=%#x gpio6=%#x gpio7=%#x\n",
 +				    k, state[k], pon, up, dn);
- 				sweet_hid_key(k, state[k]);
- 			}
++				sweet_hid_key(k, state[k]);
++			}
  		}
-@@ -122,6 +137,25 @@
++		if (keys_power_lockout > 0) {
++			keys_power_lockout--;
++		}
+@@ -122,6 +156,25 @@
  	}
  }
  
