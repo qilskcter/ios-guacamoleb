@@ -4,16 +4,27 @@ set -euo pipefail
 
 [[ "${MACHINE_CONFIG:-}" == SWEET ]] || exit 0
 
+src=""
 if [[ -f ../patches/wallpaper.lz4 ]]; then
-    mkdir -p EXTERNAL_HEADERS osfmk iokit/Kernel/arm bsd libkern
-    cp ../patches/wallpaper.lz4 EXTERNAL_HEADERS/wallpaper.lz4
-    cp ../patches/wallpaper.lz4 osfmk/wallpaper.lz4
-    cp ../patches/wallpaper.lz4 bsd/wallpaper.lz4
-    cp ../patches/wallpaper.lz4 libkern/wallpaper.lz4
-    cp ../patches/wallpaper.lz4 iokit/Kernel/arm/wallpaper.lz4
-    cp ../patches/wallpaper.lz4 wallpaper.lz4
-    echo "SWEET: staged wallpaper.lz4 to EXTERNAL_HEADERS, osfmk, bsd, libkern, iokit successfully"
+    src="../patches/wallpaper.lz4"
+elif [[ -f patches/wallpaper.lz4 ]]; then
+    src="patches/wallpaper.lz4"
+elif [[ -f wallpaper.lz4 ]]; then
+    src="wallpaper.lz4"
+fi
+
+if [[ -n "$src" ]]; then
+    mkdir -p EXTERNAL_HEADERS osfmk bsd libkern iokit/Kernel/arm
+    cp "$src" EXTERNAL_HEADERS/wallpaper.lz4
+    cp "$src" osfmk/wallpaper.lz4
+    cp "$src" bsd/wallpaper.lz4
+    cp "$src" libkern/wallpaper.lz4
+    cp "$src" iokit/wallpaper.lz4 2>/dev/null || true
+    cp "$src" iokit/Kernel/wallpaper.lz4 2>/dev/null || true
+    cp "$src" iokit/Kernel/arm/wallpaper.lz4
+    cp "$src" wallpaper.lz4
+    echo "SWEET: staged wallpaper.lz4 from $src to all include paths successfully"
 else
-    echo "SWEET: error: ../patches/wallpaper.lz4 not found" >&2
+    echo "SWEET: error: wallpaper.lz4 not found in expected locations" >&2
     exit 1
 fi
