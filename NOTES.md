@@ -2,28 +2,30 @@
 
 ## Active handoff update (2026-11-11)
 
-**🚀 SHIM-BOOT-0095 BUILT & PACKAGED: 60 FPS ANIMATION LAG ELIMINATION (IMMEDIATE SWAP PRESENT + CACHED LAYER-0 BLEND + QUARTZCORE NEAREST SAMPLING + 9X FASTER TOUCH I2C)**
-- **User Observation on `0094`:**
-  - Home Screen Dock `CABackdropLayer` blur now stays permanently (`sweet_fixup_quartzcore` at `0x188315a74` confirmed working), **but UI animations are still very laggy**.
-- **Root Causes of Animation Lag on `0094` & Fixes in `0095` (Commit `8aa7893`):**
-  1. **`SweetFramebuffer` VSync WorkLoop Blocking (`AppleCLCD::swap` / `vsyncFired` in [`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):**
-     - Previously, `AppleCLCD::swap()` only copied `rec` to `fPending` and waited for `vsyncFired` on the single-threaded `fWorkLoop` to call `fb->present(rec)`. Running `present(rec)` (8–12 ms) on `fWorkLoop` blocked subsequent VSync timer callbacks, causing `backboardd`'s `CADisplayLink` to miss alternate VSync deadlines and drop animations to 30 FPS with severe judder.
-     - **Fix:** `AppleCLCD::swap(rec)` now calls `present(local_rec)` **immediately** on the calling `backboardd` thread (`kSweetFBSwapEnd`) while `fDirty` is cleared, leaving `fWorkLoop` free to deliver 60 Hz VSync Mach notifications with < 5 us latency and zero jitter.
-  2. **Uncached Framebuffer Reads During Layer > 0 Alpha Blending ([`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):**
-     - `fSurface` (`0x9c000000`) is mapped with `kIOMapWriteCombineCache` (uncached reads), so reading `dp[x]` during translucent layer blending (`layer > 0`) stalled the CPU on every translucent pixel.
-     - **Fix:** Retain `layer0_surf` (`SweetSurface` for Layer 0, allocated in Write-Back cached RAM) during `present()` and read background pixels `l0p[x]` directly from Layer 0's cached kernel buffer instead of uncached `dp[x]`.
-  3. **`QuartzCore` 4-Tap Bilinear Backdrop Sampling ([`0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch)):**
-     - In `CA::OGL::capture_backdrop`, unslid `0x18831580c` (`0x1a9f07e8`, `cset w8, ne`) selects `image_func = 1` (4-tap floating-point bilinear sampling in `SW::sample_image_bilinear_RGBA32_float`) for every layer rendered into the `BackdropBuffer` prior to Gaussian blur.
-     - **Fix:** Refactored `sweet_fixup_quartzcore` to use `sweet_patch_user_insn()` and patch both `0x18831580c + slide` (`0x1a9f07e8` -> `0x52800008`, `mov w8, #0` for 1-tap nearest-neighbor sampling before Gaussian blur) and `0x188315a74 + slide` (`0x540004aa` -> `0x14000025`, `b 0x188315b08` to preserve permanent Dock blur at `scale = 0.25`).
-  4. **Bit-Banged I2C Touch Polling CPU Burn During Swipes ([`0082-gm1901-drivers.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0082-gm1901-drivers.patch)):**
-     - While a finger was touching the screen (`st.active != 0`), `sweet_touch.c` bit-banged 85 bytes (`1` byte `irq_sts` + `80` bytes `f12_data` for 10 fingers) with `delay(2)` every 10 ms, burning ~3.2 ms of pure CPU `delay()` spin-waiting per 10 ms tick (~32% of a core).
-     - **Fix:** Halved I2C bit-bang delay from `delay(2)` to `delay(1)`, reduced `touch_s3706()` read size from 10 fingers (80 bytes) to 2 fingers (16 bytes), and gated polling in the 10 ms loop on GPIO 122 attention (`!(touch_rd(st.gpio, TOUCH_GPIO_IO(122)) & 1u)`) with a 40 ms (`ticks % 4u == 0`) fallback while active (~9x reduction in touch CPU overhead).
+**🚀 SHIM-BOOT-0096 BUILT, PACKAGED & LIVE BOOTED: NATIVE SCREEN-OFF FADE RESTORED + SM8150 KRYO 2.84 GHz UNLOCKED + 4-PIXEL TRANSPARENT SKIP + UNROLLED 64-BIT COPY**
+- **User Feedback on `0095`:**
+  - "vẫn còn lag, hiệu ứng tắt màn hình cũng k có, tất cả animation đều lag" (All animations still laggy, screen turn-off effect missing).
+- **Root Causes Identified & Resolved in `0096` (Commits `58afd55` & `56008f5`):**
+  1. **Disruptive Pixel-Halving Loop in [`0079-sweet-display-power.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0079-sweet-display-power.patch):**
+     - When power button was pressed, `AppleCLCD::vsyncFired` ran a 6-step loop reading and writing uncached display RAM (`0x9c000000`) with `row[x] = (row[x] >> 1) & 0x7f7f7f7f`, freezing the CPU for ~1.5s and abruptly cutting off SpringBoard/CoreAnimation's native smooth screen-off fade.
+     - **Fix:** Removed the crude pixel-halving loop completely. When display power turns off, SpringBoard renders its natural fade animation cleanly to OLED black without kernel interference.
+  2. **SM8150 Kryo 485 Cores Stalled at Minimal Boot Clocks (300 MHz) in [`0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch):**
+     - In `SweetAccelerator::boostCPUClocks()`, `en = *(dom + OSM_REG_ENABLE); if (!(en & 1U)) continue;` failed because SM8150 OSM does not use bit 0 at offset 0. All 4 domains (L3, Silver, Gold, Prime) were skipped, leaving cores at ~300 MHz.
+     - **Fix:** Removed the invalid `en & 1` check. Hardware LUT is scanned and written directly to `OSM_REG_PERF_DESIRED` (`0x920`) with fallback OPP (Silver ~1.78 GHz, Gold ~2.42 GHz, Prime ~2.84 GHz).
+  3. **Synchronous Frame Copy & Alpha Blend Overhead in [`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch):**
+     - Single-pixel scalar iteration over 2.53 million pixels in Layer > 0 stalled `backboardd` for 15–20 ms per frame.
+     - **Fix:** Added 128-bit transparent block skipping (`*(const uint64_t *)&sp[x] | *(const uint64_t *)&sp[x+2] == 0`) to bypass 4 transparent pixels in 1 cycle, and unrolled 64-bit integer copy with alignment-clean casts compatible with `-mgeneral-regs-only`.
 - **CI Build & Packaged Boot Artifact:**
-  - GitHub Actions Run [42866150897](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42866150897) (commit `8aa7893`) SUCCEEDED in 8m32s.
-  - Downloaded kernel to [`xnu/out-0095/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0095/kernel.development.sweet) (verified `_sweet_fixup_quartzcore` at `0xfffffe0007a6749c`, `__ZN16SweetAccelerator14boostCPUClocksEv` at `0xfffffe0007a678f4`, and `__ZN9AppleCLCD7presentEPKh` at `0xfffffe0007a651b0`).
-  - Image: [`shim/out/shim-boot-0095.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0095.img) (26 MiB, `--highmem` ADT `phys_base = 0x100000000`).
-  - SHA256: `a9aeaa4d1d279a6c488ec30d46fc82db118d23a31e466bb93afd3508a9a34f91`.
-  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0095.img` (`Sending 'boot.img' (26296 KB) OKAY [0.620s]`, `Booting OKAY [0.080s]`, `Total time: 0.726s`).
+  - GitHub Actions Run [42984210651](https://github.com/qilskcter/ios-guacamoleb/actions/runs/42984210651) (commit `56008f5`) SUCCEEDED in 8m42s.
+  - Downloaded kernel to [`xnu/out-0096/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0096/kernel.development.sweet) (verified `__ZN16SweetAccelerator14boostCPUClocksEv` at `0xfffffe0007a678a4`, `__ZN9AppleCLCD7presentEPKh` at `0xfffffe0007a65130`, and `_sweet_fixup_quartzcore` at `0xfffffe0007a6744c`).
+  - Image: [`shim/out/shim-boot-0096.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0096.img) (26 MiB, `--highmem` ADT `phys_base = 0x100000000`).
+  - SHA256: `0e08bc2eed6b13711237276c93678189ec66f38e5efb1a0e7c29476952b918f6`.
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0096.img`:
+    - `Sending 'boot.img' (26296 KB) OKAY [0.619s]`
+    - `Booting OKAY [0.081s]`
+    - `Finished. Total time: 0.715s`
+
+
 
 **🚀 SHIM-BOOT-0094 BUILT, PACKAGED & LIVE BOOTED: PERMANENT DOCK BLUR FIX + SM8150 CPU/L3 OSM MAX CLOCK BOOST + UFS CACHE/WAIT**
 - **Root Cause 1 (Why Home Screen Dock Blur Disappeared After Initial Frames on `0093`):**
