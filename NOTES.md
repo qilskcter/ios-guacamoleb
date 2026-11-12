@@ -2,6 +2,29 @@
 
 ## Active handoff update (2026-11-12)
 
+**🚀 SHIM-BOOT-0105 BUILT & LIVE BOOTED: IMMEDIATE STARTUP WALLPAPER PAINT + STRIDE-AGNOSTIC EMPTY BACKDROP INJECTION**
+- **User Feedback & Photo Evidence (`uploaded_media_1794477423398.jpg`):**
+  - "đúng ý của tôi rồi nhưng hình nền tôi thấy chưa có" / "tất cả đều bình thường chỉ có trong phần hình nền không có gì".
+  - Photo showed clean iOS 16 UI with zero console text, AssistiveTouch, and "Thêm hình nền mới" sheet, but the background was plain/black.
+- **Root Cause Confirmed:**
+  - `SweetFramebuffer.cpp` had `if (sweet_wallpaper_pixels != NULL && src != 0 && s->bytesPerRow == fRowBytes)`.
+  - OnePlus 7 panel stride `fRowBytes = 4320` (1080x2340).
+  - But SpringBoard allocates surfaces matching the presented iPhone X logical resolution (1125x2436), with stride `s->bytesPerRow >= 4500`.
+  - Because `s->bytesPerRow != fRowBytes`, `is_empty_backdrop` was never true, so Layer 0 copied black pixels.
+  - Furthermore, Layer > 0 alpha blending had blended against `l0p` (Layer 0 black pixels) instead of `dp[x]` (the framebuffer).
+- **Fix in Milestone 0105:**
+  - Commit `4f7c710`:
+    1. In `AppleCLCD::start()`: immediately paints `sweet_wallpaper_pixels` across `fPixels` on startup.
+    2. In `AppleCLCD::present()`: removed rigid `s->bytesPerRow == fRowBytes` condition; samples pixels dynamically across relative heights (`10%`, `30%`, `50%`, `80%`) at `s->width / 2`.
+    3. Replaces black backdrop with full `fPixels` wallpaper blit.
+    4. Layer > 0 (icons, dock, UI) alpha-blends directly over `dp[x]` containing the official wallpaper.
+  - GitHub Actions CI Run [43198187086](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43198187086) PASSED in 14m05s.
+  - Downloaded to [`xnu/out-0105/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0105/kernel.development.sweet) (18.8 MiB).
+  - Packaged [`shim/out/shim-boot-0105.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0105.img) (27 MiB, 8 Kryo cores, highmem, 60Hz, UFS cache, muted console).
+  - Live booted on OnePlus 7 (`85d68e24`):
+    - `Sending 'boot.img' (27900 KB) OKAY`
+    - `Booting OKAY`
+
 **🚀 SHIM-BOOT-0104 BUILT & LIVE BOOTED: CLEAN REBASE OF PATCH 0083 -> OFFICIAL IOS 16 WALLPAPER RESTORED + PERMANENT CONSOLE MUTE**
 - **User Feedback & Photo Evidence (`uploaded_media_1794463289381.jpg`):**
   - "gieo diện đã lên nhưng nền tới giờ vẫn chưa có" (The UI loaded but background is still missing/black).
