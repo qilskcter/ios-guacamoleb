@@ -2,6 +2,26 @@
 
 ## Active handoff update (2026-11-12)
 
+**🚀 SHIM-BOOT-0100: HAKIOSMETAL ROOTFS DEPLOYMENT + IOPMPOWER SOURCE ADAPTER DETAILS & CAPACITY + SPRINGBOARD UI LITE & VIBRANCY OPTIMIZATION**
+- **User Request:**
+  - "1. Deploy HakiosMetal.bundle vào rootfs"
+  - "2. Tiếp tục tận dụng các phần còn lại từ hakios-xnu-kernel-main: Tùy chọn A (Pin & Nguồn: Tích hợp hakios.battery.cpp vào SweetBattery.cpp), Tùy chọn B (Tối ưu UI SpringBoard: plain_vibrancy() và ui_lite() từ inject_sb.c)"
+  - "làm tất cả cho tôi"
+- **Architectural Enhancements & Implementation in `0100` (Commit `9c8cd01`):**
+  1. **Rootfs Deployment Automation ([`tools/deploy_to_device.sh`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/deploy_to_device.sh) & [`tools/sweet-root-tweaks.py`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/tools/sweet-root-tweaks.py)):**
+     - Updated `sweet-root-tweaks.py` with `install_metal_and_sb_tweaks()` to copy `assets/HakiosMetal.bundle` to `/System/Library/Extensions/HakiosMetal.bundle` (0755, root:wheel) and `assets/libhakios.sb.dylib` to `/usr/lib/libhakios.sb.dylib`.
+     - Created `tools/deploy_to_device.sh` supporting both mounted rootfs images (`sudo ./tools/deploy_to_device.sh /Volumes/iOSRoot`) and live recovery ADB push to internal UFS `userdata` (`/dev/block/bootdevice/by-name/userdata` mounted at `/mnt/ios`).
+  2. **Modern iOS 16 Battery & Power Integration ([`SweetBattery.cpp`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0062-sweet-touch-power-battery.patch)):**
+     - Implemented modern iOS 16 `powerd` capacity conventions: `setCurrentCapacity(percent)` (0..100) and `setMaxCapacity(100)` so `_UIBatteryView` in SpringBoard Status Bar and Lock Screen directly displays the integer percentage.
+     - Accurate mAh battery reporting for OnePlus 7 (`GM1901` 3700 mAh): `AppleRawCurrentCapacity = (3700 * percent + 50) / 100`, `AppleRawMaxCapacity = 3700`, `NominalChargeCapacity = 3700`, `DesignCapacity = 3700`.
+     - Full Apple `kIOPMPSAdapterDetailsKey` dictionary with `Watts`, `Current`, `AdapterVoltage`, and `FamilyCode` (`kIOPSFamilyCodeUSBCTypeC = 0xe0004009`), satisfying `powerd` charger recognition and activating the charging lightning bolt icon.
+  3. **SpringBoard UI Optimization (`plain_vibrancy()` & `ui_lite()`):**
+     - Compiled and signed `assets/libhakios.sb.dylib` with `iPhoneOS.sdk` for iOS 16 arm64.
+     - Configured static and dynamic accessibility preferences in `tools/sweet-root-tweaks.py`:
+       - `com.apple.springboard`: `SBReduceTransparencyEnabled: True`, `SBReduceMotionEnabled: True`, `BSUIVibrancyEffectViewDisabled: True`.
+       - `com.apple.Accessibility`: `ReduceTransparencyEnabled: True`, `ReduceMotionEnabled: True`, `EnhanceBackgroundContrast: True`.
+     - Replaces heavy multi-pass Gaussian blurs with plain frosted glass colors on dock, folders, and Control Center, eliminating animation stutter.
+
 **🚀 SHIM-BOOT-0099 BUILT, PACKAGED & LIVE BOOTED: LINUX MSM DRM / FREEDRENO GEM ARCHITECTURE INTEGRATED FOR ADRENO 640 + HAKIOSMETAL USERLAND BUNDLE COMPILED**
 - **User Request:**
   - "làm cho tôi 2. Tận dụng về mặt kiến trúc GPU Metal" (Leverage the GPU Metal architecture from `hakios-xnu-kernel-main`).
