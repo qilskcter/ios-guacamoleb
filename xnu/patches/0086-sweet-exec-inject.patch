@@ -24,7 +24,7 @@
 +		inject_checked = 1;
 +		PE_parse_boot_argn("exec_inject", exec_inject_conf, sizeof(exec_inject_conf));
 +	}
-+	int sbinject = 1;
++	int sbinject = 0;
 +	PE_parse_boot_argn("sbinject", &sbinject, sizeof(sbinject));
 +	if (!sbinject) {
 +		return false;

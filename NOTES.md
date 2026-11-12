@@ -48,6 +48,16 @@
     - `Sending 'boot.img' (30956 KB) OKAY [0.725s]`
     - `Booting OKAY [0.081s]`
     - `Finished. Total time: 0.825s`
+- **User Feedback & Photo Evidence (`uploaded_media_1794500377937.jpg`):**
+  - "nó chỉ hiện v và không thao tác đươc gì, chỉ tắt mở màn hình được" (Only shows wallpaper, no UI interaction, only screen on/off works).
+  - Photo showed full-screen vibrant WWDC 2022 wallpaper with zero black areas, but SpringBoard UI (Clock, Lock, AssistiveTouch, icons) was absent because dyld rejected `libhakios.sb.dylib` insertion on launch.
+- **Fix in `shim-boot-0106c.img`:**
+  - Built `payload-0106c.bin` with `sbinject=0` to allow SpringBoard to launch normally without dyld abort, while keeping the full-bleed WWDC 2022 wallpaper and 180px bottom touch edge margin.
+  - Packaged [`shim/out/shim-boot-0106c.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0106c.img) (30 MiB).
+  - Live booted on OnePlus 7 (`85d68e24`):
+    - `Sending 'boot.img' (30956 KB) OKAY [0.728s]`
+    - `Booting OKAY [0.081s]`
+    - `Finished. Total time: 0.822s`
 - **User Feedback & Photo Evidence (`uploaded_media_1794477423398.jpg`):**
   - "đúng ý của tôi rồi nhưng hình nền tôi thấy chưa có" / "tất cả đều bình thường chỉ có trong phần hình nền không có gì".
   - Photo showed clean iOS 16 UI with zero console text, AssistiveTouch, and "Thêm hình nền mới" sheet, but the background was plain/black.
