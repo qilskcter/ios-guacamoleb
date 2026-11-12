@@ -1,6 +1,24 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## Active handoff update (2026-11-12)
+## Active handoff update (2026-11-13)
+
+**🚀 SHIM-BOOT-0107 BUILT & LIVE BOOTED: CLEAN GM1901 HARDWARE DRIVERS RESTORED + EXPANDED 180PX BOTTOM TOUCH EDGE GESTURES + FULL-BLEED OFFICIAL IOS 16 WWDC WALLPAPER**
+- **User Feedback & Problem Analysis:**
+  - In `0106` / `0106c`, screen displayed the full-bleed WWDC 2022 wallpaper cleanly across 100% of AMOLED pixels without any black bars, but showed no UI elements (no clock, no lock icon, no AssistiveTouch) and touch interaction did not respond.
+  - Root cause confirmed: In commit `c0f1a31`, an attempt to add `#define SWEET_TOUCH_EDGE_PX 180` directly to `0082-gm1901-drivers.patch` corrupted a hunk header, causing `git apply --check` to fail. As designed, CI skipped `0082-gm1901-drivers.patch`, omitting the entire GM1901 Synaptics/Goodix touch driver and panel configuration from the kernel.
+- **Resolution in Milestone 0107:**
+  - Commit `c6a2eb9`:
+    1. Restored `0082-gm1901-drivers.patch` to the exact byte-for-byte working version from `4f7c710` (Kernel 0105).
+    2. Modified `0071-sweet-touch-edge.patch` cleanly with `#define SWEET_TOUCH_EDGE_PX 180` (expanding bottom edge margin from 48px / ~3mm to 180px / ~12mm for reliable swipe-up unlock).
+    3. Dropped experimental `0086-sweet-exec-inject.patch` completely to avoid any dyld crash risk in SpringBoard.
+  - GitHub Actions CI Run [43266721051](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43266721051) SUCCEEDED in 8m39s.
+  - Downloaded kernel to [`xnu/out-0107/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0107/kernel.development.sweet) (21.9 MiB).
+  - Verified symbols via `nm`: `_sweet_wallpaper_comp` (4.74 MB), `SweetHIDTouch`, `SweetHIDButtons`, and `_sweet_keys_init` all present.
+  - Packaged [`shim/out/shim-boot-0107.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0107.img) (30 MiB, SHA256: `514e2774fdfc81b27725c2baffbf114f3d404f014e49dd49fbe527e35a7bd0f7`).
+  - Live booted on OnePlus 7 (`85d68e24`):
+    - `Sending 'boot.img' (30956 KB) OKAY [0.735s]`
+    - `Booting OKAY [0.081s]`
+    - `Finished. Total time: 0.855s`
 
 **🚀 SHIM-BOOT-0106: KERNEL EXEC_INJECT (SPRINGBOARD DYLD INJECTION) + POSTER SWITCHER SUPPRESSION + FULL-BLEED IOS 16 WWDC WALLPAPER + 180PX TOUCH EDGE GESTURES**
 - **User Feedback & Photo Evidence (`uploaded_media_1794480457248.jpg` & `uploaded_media_1794477423398.jpg`):**
