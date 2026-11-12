@@ -2,7 +2,33 @@
 
 ## Active handoff update (2026-11-12)
 
-**🚀 SHIM-BOOT-0103B BUILT & LIVE BOOTED: RESTORED 8 KRYO CORES (`cpus=8`) + UFS CACHE (`ufscache=1 ufswait=1`) + 60HZ VSYNC FOR FAST HOME SCREEN LAUNCH**
+**🚀 SHIM-BOOT-0104 BUILT & LIVE BOOTED: CLEAN REBASE OF PATCH 0083 -> OFFICIAL IOS 16 WALLPAPER RESTORED + PERMANENT CONSOLE MUTE**
+- **User Feedback & Photo Evidence (`uploaded_media_1794463289381.jpg`):**
+  - "gieo diện đã lên nhưng nền tới giờ vẫn chưa có" (The UI loaded but background is still missing/black).
+  - Photo showed console log text (`SWEET AKS`, `SMP SpringBoard t9..t18`, `exec ...`) filling the screen.
+- **Root Cause Confirmed:**
+  - In CI Run `43167230187` (Kernel 0103), `0083-sweet-fb-bulk-copy.patch` was **skipped** with:
+    `Skipping patch .../0083-sweet-fb-bulk-copy.patch: error: patch failed: iokit/Kernel/arm/SweetFramebuffer.cpp:314`
+  - Cause: `0067-sweet-console-mute.patch` had changed the preceding lines in `present()` from two closing braces to one, causing `git apply --check` to reject hunk 4 in `0083`.
+  - Because `0083` was skipped, Kernel 0103 was only 17.2 MB instead of 18.8 MB:
+    1. `_sweet_wallpaper_comp` and `sweet_wallpaper_pixels` were never compiled in, leaving Layer 0 empty (black screen).
+    2. `sweet_console_muted = 1` in `AppleCLCD::start()` was never compiled in, so console text continued drawing on screen during SpringBoard launch.
+- **Fix in Milestone 0104:**
+  - Commit `f285da9`: rebased `0083-sweet-fb-bulk-copy.patch` hunk context so `git apply --check` passes cleanly with 0 errors.
+  - GitHub Actions CI Run [43179597451](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43179597451) PASSED in 7m23s:
+    - Confirmed in log: `Applying patch: .../0083-sweet-fb-bulk-copy.patch` (clean application).
+  - Downloaded to [`xnu/out-0104/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0104/kernel.development.sweet) (18.8 MiB, 18,836,232 bytes).
+  - Verified symbols via `nm`:
+    - `_sweet_wallpaper_comp` at `0xfffffe000702dbdc` (1.6 MB compressed iOS 16 wallpaper).
+    - `__ZL22sweet_wallpaper_pixels` at `0xfffffe00081fde58` (10.1 MB framebuffer buffer).
+    - `__ZL20sweet_lz4_decompress` at `0xfffffe0007bf12c8`.
+    - `_sweet_console_muted` at `0xfffffe0007d6d4c8`.
+    - `SweetBattery::publish` at `0xfffffe0007bf27f8` (enhanced 3700 mAh + Type-C charging).
+  - Packaged [`shim/out/shim-boot-0104.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0104.img) (27 MiB, 8 Kryo cores, highmem, 60Hz, UFS cache, muted console).
+  - Live booted on OnePlus 7 (`85d68e24`):
+    - `Sending 'boot.img' (27900 KB) OKAY [0.664s]`
+    - `Booting OKAY [0.081s]`
+    - `Finished. Total time: 0.760s`
 - **User Feedback:**
   - "sau khi chạy xong màn hình màu đỏ thì tất cả thành màu đen hết, không hiển thị gì cả" (After red shim screen finishes, everything is black).
 - **Root Cause:**
