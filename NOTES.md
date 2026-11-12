@@ -2,6 +2,20 @@
 
 ## Active handoff update (2026-11-12)
 
+**🚀 SHIM-BOOT-0102 BUILT & LIVE BOOTED: UNCONDITIONAL CONSOLE LOG MUTE ON GUI PRESENTATION (CLEAN HOME SCREEN GUARANTEE)**
+- **User Request:**
+  - "kiểm tra lại cho tôi" (Check again for me - ensure console log stops drawing after entering the home screen).
+- **Implementation in `0102` (Commit `08b31b5`):**
+  - Updated [`0067-sweet-console-mute.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0067-sweet-console-mute.patch): `AppleCLCD::present` now unconditionally sets `sweet_console_muted = 1` on the very first GUI swap, independent of boot-args.
+  - While early boot logs run normally so progress is visible, the exact instant `SpringBoard` presents the Home Screen / Lock Screen, all console text drawing on the display is completely and permanently muted (`_cnputs` returns immediately if `sweet_console_muted && !panic_active()`).
+  - Layer 0 wallpaper (1080x2340) replaces the framebuffer, wiping clean any early boot text.
+  - CI Run [43163515149](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43163515149) SUCCEEDED in 8m48s.
+  - Downloaded to [`xnu/out-0102/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0102/kernel.development.sweet) (18.8 MiB).
+  - Packaged [`shim/out/shim-boot-0102.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0102.img) (27 MiB).
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0102.img`:
+    - `Sending 'boot.img' (27900 KB) OKAY [0.653s]`
+    - `Booting OKAY [0.081s]`
+
 **🚀 SHIM-BOOT-0101 BUILT & LIVE BOOTED: CLEAN SCREEN BOOT (CONSOLE LOGS MUTED VIA `sweetfb_noconsole=1`, REMOVED KPRINTF SPAM & SERIAL=3)**
 - **User Request:**
   - "tôi muốn bỏ các dòng log đó ra" (Remove console text from drawing over the screen).
