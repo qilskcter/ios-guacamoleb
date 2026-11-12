@@ -242,6 +242,35 @@ def springboard_assets(root):
                 print('Installed springboard asset:', d)
 
 
+def install_metal_and_sb_tweaks(root):
+    """Deploy HakiosMetal.bundle and libhakios.sb.dylib into the iOS root."""
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    metal_src = os.path.join(repo_dir, 'assets/HakiosMetal.bundle')
+    metal_dst = os.path.join(root, 'System/Library/Extensions/HakiosMetal.bundle')
+
+    if os.path.isdir(metal_src):
+        if os.path.exists(metal_dst):
+            shutil.rmtree(metal_dst)
+        shutil.copytree(metal_src, metal_dst)
+        for dirpath, dirnames, filenames in os.walk(metal_dst):
+            os.chown(dirpath, 0, 0)
+            os.chmod(dirpath, 0o755)
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                os.chown(fp, 0, 0)
+                os.chmod(fp, 0o755 if f == 'HakiosMetal' else 0o644)
+        print(f"[+] Installed HakiosMetal.bundle to {metal_dst}")
+
+    sb_dylib_src = os.path.join(repo_dir, 'assets/libhakios.sb.dylib')
+    sb_dylib_dst = os.path.join(root, 'usr/lib/libhakios.sb.dylib')
+    if os.path.isfile(sb_dylib_src):
+        os.makedirs(os.path.dirname(sb_dylib_dst), exist_ok=True)
+        shutil.copy2(sb_dylib_src, sb_dylib_dst)
+        os.chown(sb_dylib_dst, 0, 0)
+        os.chmod(sb_dylib_dst, 0o755)
+        print(f"[+] Installed libhakios.sb.dylib to {sb_dylib_dst}")
+
+
 def main():
     global BUILD, VERSION
     if len(sys.argv) != 2 or not os.path.isdir(os.path.join(sys.argv[1], 'System/Library/xpc')):
@@ -258,6 +287,7 @@ def main():
     activation(root)
     audio(root)
     springboard_assets(root)
+    install_metal_and_sb_tweaks(root)
     merge_pref(root, 'com.apple.migration', {
         'LastSystemVersion': BUILD,
         'DMUserDataDisposition': {'SyntheticDidUpgrade': False, 'buildVersion': BUILD}})
@@ -265,6 +295,7 @@ def main():
         'LastSystemVersion': BUILD})
     byhost_pref(root, 'com.apple.migration', {
         'LastSystemVersion': BUILD})
+    # SpringBoard & Accessibility UI optimization (plain_vibrancy & ui_lite)
     merge_pref(root, 'com.apple.springboard', {
         'BKNoWatchdogs': True,
         'FBLaunchWatchdogExceptions': {'com.apple.purplebuddy': 100.0},
@@ -273,8 +304,17 @@ def main():
         'SBShowInternalApps': True,
         'SBLockScreenShowWallpaper': True,
         'SBHomeScreenShowWallpaper': True,
-        'SBReduceTransparencyEnabled': False,
-        'SBReduceMotionEnabled': False})
+        'SBReduceTransparencyEnabled': True,
+        'SBReduceMotionEnabled': True,
+        'BSUIVibrancyEffectViewDisabled': True})
+    merge_pref(root, 'com.apple.Accessibility', {
+        'ReduceTransparencyEnabled': True,
+        'ReduceMotionEnabled': True,
+        'EnhanceBackgroundContrast': True})
+    byhost_pref(root, 'com.apple.Accessibility', {
+        'ReduceTransparencyEnabled': True,
+        'ReduceMotionEnabled': True,
+        'EnhanceBackgroundContrast': True})
     merge_pref(root, 'com.apple.purplebuddy', {
         'SetupDone': True, 'SetupFinishedAllSteps': True, 'SetupVersion': 11,
         'daemonizeNeedsToRun': False})
