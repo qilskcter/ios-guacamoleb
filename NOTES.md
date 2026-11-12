@@ -2,6 +2,23 @@
 
 ## Active handoff update (2026-11-12)
 
+**🚀 KERNEL 0103 / CI RUN 43167230187: ROOT CAUSE ANALYSIS & PERMANENT MUTE OF CONSOLE TEXT + SAFE METAL GATE**
+- **User Feedback & Photo Evidence (`uploaded_media_1794463289381.jpg`):**
+  - Photo showed a pitch black screen covered with:
+    - `exec iconservicesagent`, `exec remindd`, `exec fairplayd.H2` (patch 0042)
+    - `SWEET AKS: securityd...`, `SWEET AKS: SpringBoard...` (patch 0038)
+    - `SMP SpringBoard t9 pc ...`, `t10... t18...` (patch 0054 process sampler, which triggers after 90 seconds)
+- **Root Cause Identified:**
+  1. In `0099`, `SweetAdreno.cpp` unconditionally advertised `IOGPUMetal = true`, `MetalPluginName = "HakiosMetal"`.
+  2. Because `HakiosMetal.bundle` has not yet been copied to `/System/Library/Extensions/HakiosMetal.bundle` on the internal UFS `userdata` partition, `Metal.framework` in `backboardd` failed to find the bundle and stalled before the first `swap()`.
+  3. Because `swap()` was never called, `AppleCLCD::present` never blitted Layer 0 wallpaper over the screen and never set `sweet_console_muted = 1`.
+  4. Consequently, the console remained active, and after 90 seconds, `sweet_sample_thread` dumped all SpringBoard thread backtraces (`SMP SpringBoard t9..t18`) over the black screen!
+- **Permanent Fixes in Commit `e2d6b30`:**
+  1. [`0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch): Sets `sweet_console_muted = 1` immediately in `AppleCLCD::start()` right after loading the wallpaper into RAM. Once display driver starts, all subsequent `printf`/`IOLog` (`exec`, `SWEET AKS`, `SMP`) are completely muted from drawing on the display.
+  2. [`0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch): Gates `IOGPUMetal` and `MetalPluginName` behind `metal=1` boot-arg. When boot-arg `metal` is absent, `backboardd` uses the safe software compositor (as in 0098), bringing up the Home Screen and icons immediately without stalling!
+  3. [`0067-sweet-console-mute.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0067-sweet-console-mute.patch): Fixed hunk header line count (`@@ -290,9 +292,4 @@`).
+- **CI Build:** Run [43167230187](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43167230187) in progress.
+
 **🚀 SHIM-BOOT-0102 BUILT & LIVE BOOTED: UNCONDITIONAL CONSOLE LOG MUTE ON GUI PRESENTATION (CLEAN HOME SCREEN GUARANTEE)**
 - **User Request:**
   - "kiểm tra lại cho tôi" (Check again for me - ensure console log stops drawing after entering the home screen).
