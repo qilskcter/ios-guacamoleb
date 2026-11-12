@@ -35,6 +35,19 @@
      - Replaced the dark mountain image with Apple's authentic WWDC 2022 flowing ribbon wallpaper (1170x2532 resized to 1080x2340 BGRA).
      - High-compression LZ4 payload (4,743,743 bytes) with continuous vibrant color from row 0 (deep blue) to row 1400 (amber glow) and row 2340 (bright emerald/forest green). Zero black rows across the entire canvas.
      - Updated `.long 4743743` in `0083` and refreshed all `.cpbitmap` and JPEG thumbnails in `assets/springboard/`.
+- **CI Build & Packaging Details:**
+  - GitHub Actions Run [43248664154](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43248664154) (commits `c0f1a31` & `d2c0e5f`) SUCCEEDED in 9m58s.
+  - Downloaded kernel artifact to [`xnu/out-0106/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0106/kernel.development.sweet) (21.9 MiB).
+  - Confirmed embedded symbols via `strings` & `nm`:
+    - `exec_inject` & `/usr/lib/libhakios.sb.dylib SpringBoard` present.
+    - `_sweet_wallpaper_comp` (4.74 MB) & `_sweet_wallpaper_comp_len` present.
+    - `_sweet_console_muted` present.
+    - `SweetHIDTouch` with 180px bottom edge detection present.
+  - Packaged [`shim/out/shim-boot-0106.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0106.img) (30 MiB, SHA256: `bd3f4f91aa06eb75d2e38938504d552c370bd24382af747bd3810a5d3251af5d`).
+  - Live booted on OnePlus 7 (`85d68e24`):
+    - `Sending 'boot.img' (30956 KB) OKAY [0.725s]`
+    - `Booting OKAY [0.081s]`
+    - `Finished. Total time: 0.825s`
 - **User Feedback & Photo Evidence (`uploaded_media_1794477423398.jpg`):**
   - "đúng ý của tôi rồi nhưng hình nền tôi thấy chưa có" / "tất cả đều bình thường chỉ có trong phần hình nền không có gì".
   - Photo showed clean iOS 16 UI with zero console text, AssistiveTouch, and "Thêm hình nền mới" sheet, but the background was plain/black.
