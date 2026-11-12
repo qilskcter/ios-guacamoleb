@@ -2,6 +2,21 @@
 
 ## Active handoff update (2026-11-12)
 
+**🚀 SHIM-BOOT-0103B BUILT & LIVE BOOTED: RESTORED 8 KRYO CORES (`cpus=8`) + UFS CACHE (`ufscache=1 ufswait=1`) + 60HZ VSYNC FOR FAST HOME SCREEN LAUNCH**
+- **User Feedback:**
+  - "sau khi chạy xong màn hình màu đỏ thì tất cả thành màu đen hết, không hiển thị gì cả" (After red shim screen finishes, everything is black).
+- **Root Cause:**
+  - `0103` had accidentally passed `cpus=1` without `ufscache=1 ufswait=1`.
+  - On a single 1.78 GHz core with unbuffered UFS DMA, running 40+ iOS daemons took 2-3 minutes to reach `SpringBoard`'s first swap, leaving the screen black while waiting.
+- **Fix in `0103b`:**
+  - Restored the proven milestone `0098` high-performance boot-args:
+    `debug=0xc cpus=8 keepsyms=1 sweetfb_noconsole=1 sweetfb_hz=60 sweetkeys=1 sweettouch=1 sweetusb=0 ufscache=1 ufswait=1 ufsrw=1 rootrw=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin launchd_unsecure_cache=1 wdt=-1 sweetsample=- sweetiolog=-`
+  - Packaged [`shim/out/shim-boot-0103b.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0103b.img) (26 MiB, 8 Kryo cores, highmem).
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0103b.img`:
+    - `Sending 'boot.img' (26316 KB) OKAY [0.621s]`
+    - `Booting OKAY [0.081s]`
+    - `Finished. Total time: 0.718s`
+
 **🚀 SHIM-BOOT-0103 BUILT & LIVE BOOTED: CONSOLE PERMANENTLY MUTED ON DISPLAY + SAFE COMPOSITOR RESTORED FOR CLEAN HOME SCREEN**
 - **User Request:**
   - "kiểm tra giúp tôi" (Check for me - verify that console text does not display on screen after reaching home screen).
