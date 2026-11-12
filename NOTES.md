@@ -21,6 +21,14 @@
        - `com.apple.springboard`: `SBReduceTransparencyEnabled: True`, `SBReduceMotionEnabled: True`, `BSUIVibrancyEffectViewDisabled: True`.
        - `com.apple.Accessibility`: `ReduceTransparencyEnabled: True`, `ReduceMotionEnabled: True`, `EnhanceBackgroundContrast: True`.
      - Replaces heavy multi-pass Gaussian blurs with plain frosted glass colors on dock, folders, and Control Center, eliminating animation stutter.
+- **CI Build & Packaged Boot Artifact:**
+  - GitHub Actions Run [43160371568](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43160371568) (commit `9c8cd01`) SUCCEEDED in 8m19s.
+  - Downloaded kernel to [`xnu/out-0100/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0100/kernel.development.sweet) (18.8 MiB, verified `__ZN12SweetBattery7publishEjjibbbbbb` at `0xfffffe0007bf27ec` and `__ZN26SweetAcceleratorUserClient6gemNewEP11msm_gem_new` at `0xfffffe0007bf47ac`).
+  - Image: [`shim/out/shim-boot-0100.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0100.img) (27 MiB, `--highmem` ADT `phys_base = 0x100000000`).
+  - SHA256: `56066087f3d08f9fb07ff2a36556f1f7a6ce53067464a05fb2164ec1929b0a0f`.
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0100.img`:
+    - `Sending 'boot.img' (27900 KB) OKAY [0.657s]`
+    - `Booting OKAY`
 
 **🚀 SHIM-BOOT-0099 BUILT, PACKAGED & LIVE BOOTED: LINUX MSM DRM / FREEDRENO GEM ARCHITECTURE INTEGRATED FOR ADRENO 640 + HAKIOSMETAL USERLAND BUNDLE COMPILED**
 - **User Request:**
