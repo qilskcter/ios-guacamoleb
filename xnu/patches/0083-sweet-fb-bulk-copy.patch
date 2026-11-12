@@ -1,5 +1,5 @@
 diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
-index 277f145..99201b6 100644
+index 277f145..e9dc4df 100644
 --- a/iokit/Kernel/arm/SweetFramebuffer.cpp
 +++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
 @@ -148,6 +148,65 @@ public:
@@ -68,7 +68,7 @@ index 277f145..99201b6 100644
  bool
  AppleCLCD::start(IOService *provider)
  {
-@@ -191,10 +250,19 @@ AppleCLCD::start(IOService *provider)
+@@ -191,10 +250,22 @@ AppleCLCD::start(IOService *provider)
  		IOLog("SWEET FB: no vsync timer\n");
  		return false;
  	}
@@ -83,13 +83,16 @@ index 277f145..99201b6 100644
 +			sweet_lz4_decompress(sweet_wallpaper_comp, sweet_wallpaper_comp_len,
 +			    sweet_wallpaper_pixels, 10108800);
 +			IOLog("SWEET FB: loaded iOS 16 wallpaper (10108800 bytes)\n");
++			if (fPixels != 0) {
++				bcopy(sweet_wallpaper_pixels, (void *)fPixels, (size_t)fHeight * fRowBytes);
++			}
 +		}
 +	}
 +	sweet_console_muted = 1;
  
  	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
  	setProperty("external", false);
-@@ -289,15 +357,75 @@ static uint64_t sweet_fb_swap_count;
+@@ -289,15 +360,75 @@ static uint64_t sweet_fb_swap_count;
  void
  AppleCLCD::swap(const uint8_t *rec)
  {
@@ -166,15 +169,7 @@ index 277f145..99201b6 100644
  void
  AppleCLCD::present(const uint8_t *rec)
  {
-@@ -309,6 +437,7 @@ AppleCLCD::present(const uint8_t *rec)
- 		sweet_console_muted = 1;
- 	}
- 
-+	SweetSurface *layer0_surf = NULL;
- 	for (uint32_t layer = 0; layer < SWEET_FB_LAYERS; layer++) {
- 		uint32_t id = get32(rec, 0x54 + 4 * layer);
- 		const uint8_t *a = rec + 0x64 + 16 * layer;
-@@ -376,14 +505,87 @@ AppleCLCD::present(const uint8_t *rec)
+@@ -376,10 +507,72 @@ AppleCLCD::present(const uint8_t *rec)
  			src = 0;
  		}
  		if (src != 0 && bpe == 4) {
@@ -188,24 +183,21 @@ index 277f145..99201b6 100644
 +			uint32_t copy_h = ((uint32_t)(dy + h) > fHeight) ? (fHeight > (uint32_t)dy ? fHeight - (uint32_t)dy : 0) : (uint32_t)h;
 +
 +			if (layer == 0) {
-+				if (layer0_surf == NULL) {
-+					s->retain();
-+					layer0_surf = s;
-+				}
 +				bool is_empty_backdrop = false;
-+				if (sweet_wallpaper_pixels != NULL && src != 0 && s->bytesPerRow == fRowBytes) {
-+					const uint32_t *p0 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)50 * s->bytesPerRow + (uint64_t)540 * 4);
-+					const uint32_t *p1 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)500 * s->bytesPerRow + (uint64_t)540 * 4);
-+					const uint32_t *p2 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)1170 * s->bytesPerRow + (uint64_t)540 * 4);
-+					const uint32_t *p3 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)2000 * s->bytesPerRow + (uint64_t)540 * 4);
++				if (sweet_wallpaper_pixels != NULL && src != 0) {
++					uint32_t sample_x = (s->width > 100) ? s->width / 2 : 0;
++					uint32_t sh = s->height;
++					const uint32_t *p0 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)(sh * 1 / 10) * s->bytesPerRow + (uint64_t)sample_x * 4);
++					const uint32_t *p1 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)(sh * 3 / 10) * s->bytesPerRow + (uint64_t)sample_x * 4);
++					const uint32_t *p2 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)(sh * 5 / 10) * s->bytesPerRow + (uint64_t)sample_x * 4);
++					const uint32_t *p3 = (const uint32_t *)(const void *)(src + s->offset + (uint64_t)(sh * 8 / 10) * s->bytesPerRow + (uint64_t)sample_x * 4);
 +					if ((*p0 & 0x00ffffff) == 0 && (*p1 & 0x00ffffff) == 0 &&
 +					    (*p2 & 0x00ffffff) == 0 && (*p3 & 0x00ffffff) == 0) {
 +						is_empty_backdrop = true;
 +					}
 +				}
 +				if (is_empty_backdrop) {
-+					bcopy(sweet_wallpaper_pixels, dstRow, (size_t)copy_h * fRowBytes);
-+					bcopy(sweet_wallpaper_pixels, (void *)(src + s->offset), (size_t)copy_h * fRowBytes);
++					bcopy(sweet_wallpaper_pixels, (void *)fPixels, (size_t)fHeight * fRowBytes);
 +				} else if (sx == 0 && dx == 0 && rowBytesToCopy == fRowBytes && s->bytesPerRow == fRowBytes) {
 +					bcopy(srcRow, dstRow, (size_t)copy_h * fRowBytes);
 +				} else {
@@ -218,16 +210,9 @@ index 277f145..99201b6 100644
 +			} else {
 +				/* Layer > 0 (Backdrop blur, UI overlays, Icons): fast fixed-point alpha-blend into framebuffer */
 +				uint32_t copy_w = ((uint32_t)(dx + w) > fWidth) ? (fWidth > (uint32_t)dx ? fWidth - (uint32_t)dx : 0) : (uint32_t)w;
-+				uintptr_t l0_base = (layer == 1 && layer0_surf != NULL) ? layer0_surf->kernelAddress() : 0;
 +				for (uint32_t y = 0; y < copy_h; y++) {
 +					const uint32_t *sp = (const uint32_t *)(const void *)srcRow;
 +					uint32_t *dp = (uint32_t *)(void *)dstRow;
-+					const uint32_t *l0p = NULL;
-+					if (l0_base != 0 && (uint32_t)(dy + y) < layer0_surf->height &&
-+					    (uint32_t)(dx + copy_w) <= layer0_surf->width) {
-+						l0p = (const uint32_t *)(const void *)(l0_base + layer0_surf->offset +
-+						    (uint64_t)(dy + y) * layer0_surf->bytesPerRow + (uint64_t)dx * 4);
-+					}
 +					uint32_t x = 0;
 +					while (x < copy_w) {
 +						if (x + 4 <= copy_w) {
@@ -243,7 +228,7 @@ index 277f145..99201b6 100644
 +						if (a == 255) {
 +							dp[x] = src_px;
 +						} else if (a > 0) {
-+							uint32_t dst_px = (l0p != NULL) ? l0p[x] : dp[x];
++							uint32_t dst_px = dp[x];
 +							uint32_t inv_a = 255 - a;
 +							uint32_t rb_s = src_px & 0x00ff00ff;
 +							uint32_t g_s  = (src_px >> 8) & 0x000000ff;
@@ -261,12 +246,7 @@ index 277f145..99201b6 100644
  			}
  		}
  		s->release();
- 	}
-+	OSSafeReleaseNULL(layer0_surf);
- }
- 
- bool
-@@ -455,6 +657,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
+@@ -455,6 +648,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
  }
  
  static uint64_t sweet_fb_logged;        /* selectors already logged (< 64) */
@@ -274,7 +254,7 @@ index 277f145..99201b6 100644
  
  IOReturn
  IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-@@ -471,6 +674,7 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -471,6 +665,7 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
  		outCount = 1;
  		break;
  	case kSweetFBSwapBegin:
