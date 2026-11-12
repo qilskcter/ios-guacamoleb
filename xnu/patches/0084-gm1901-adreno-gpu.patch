@@ -24,13 +24,14 @@
      "     'IOClass'         = IOPanicPlatform;"
 --- /dev/null
 +++ b/iokit/Kernel/arm/SweetAdreno.cpp
-@@ -0,0 +1,412 @@
+@@ -0,0 +1,882 @@
 +/*
 + * Qualcomm Adreno 640 hardware graphics accelerator driver for OnePlus 7 (SM8150).
 + *
 + * Powers on and sequences Adreno 640 GPUCC GDSC and clocks, boosts SM8150
-+ * Kryo 485 CPU & L3 OSM performance states, and applies QuartzCore
-+ * CABackdropLayer software downsample fixup.
++ * Kryo 485 CPU & L3 OSM performance states, applies QuartzCore CABackdropLayer
++ * software downsample fixup, and implements Linux MSM DRM / freedreno GEM
++ * IOUserClient architecture for HakiosMetal acceleration.
 + */
 +#include <pexpert/arm64/board_config.h>
 +
@@ -40,9 +41,13 @@
 +#include <IOKit/IOKitKeys.h>
 +#include <IOKit/IOLib.h>
 +#include <IOKit/IOLocks.h>
++#include <IOKit/IOBufferMemoryDescriptor.h>
++#include <IOKit/IOSubMemoryDescriptor.h>
 +#include <IOKit/system.h>
 +#include <pexpert/pexpert.h>
 +#include <mach/mach_types.h>
++#include <mach/mach_time.h>
++#include <mach/vm_param.h>
 +#include <machine/machine_routines.h>
 +#include <sys/proc.h>
 +#include <sys/systm.h>
@@ -89,15 +94,6 @@
 +	return true;
 +}
 +
-+/*
-+ * SWEET: Fix QuartzCore's CA::OGL::capture_backdrop so that:
-+ * 1. At unslid 0x18831580c: use nearest-neighbor sampling (mov w8, #0) instead
-+ *    of 4-tap floating-point bilinear interpolation (cset w8, ne) when sampling
-+ *    background layers into the backdrop buffer prior to Gaussian blur.
-+ * 2. At unslid 0x188315a74: force image_func = 1 (b 0x188315b08) when
-+ *    scale < 0.5 (e.g. Home Screen Dock at scale = 0.25) instead of GL-only
-+ *    image_func = 26/28 rejected by SWContext::function_supported.
-+ */
 +extern "C" void
 +sweet_fixup_quartzcore(task_t task)
 +{
@@ -141,18 +137,164 @@
 +
 +#define CHIP_ID_ADRENO_640     0x06040001U
 +
-+/* Qualcomm SM8150 OSM (Operating State Manager) physical base & domain offsets */
++/* Qualcomm SM8150 OSM physical base & domain offsets */
 +#define SM8150_OSM_PHYS_BASE   0x18320000ULL
 +#define SM8150_OSM_MAP_SIZE    0x0000C000ULL
 +#define OSM_OFF_L3             0x1000U
 +#define OSM_OFF_SILVER         0x3000U
 +#define OSM_OFF_GOLD           0x5800U
 +#define OSM_OFF_PRIME          0x7800U
-+#define OSM_REG_ENABLE         0x000U
 +#define OSM_REG_LUT_BASE       0x110U
 +#define OSM_REG_PERF_DESIRED   0x920U
 +#define OSM_LUT_ROW_STRIDE     0x20U
 +#define OSM_LUT_MAX_ROWS       40U
++
++/* Linux MSM DRM IOUserClient interface numbers */
++enum {
++	kDrmGemClose            = 0x09,
++	kMsmGetParam            = 0x40,
++	kMsmSetParam            = 0x41,
++	kMsmGemNew              = 0x42,
++	kMsmGemInfo             = 0x43,
++	kMsmGemCpuPrep          = 0x44,
++	kMsmGemCpuFini          = 0x45,
++	kMsmGemSubmit           = 0x46,
++	kMsmWaitFence           = 0x47,
++	kMsmGemMadvise          = 0x48,
++	kMsmSubmitQueueNew      = 0x4a,
++	kMsmSubmitQueueClose    = 0x4b,
++	kMsmSubmitQueueQuery    = 0x4c,
++	kHakiosSurface          = 0x7e,
++	kHakiosShow             = 0x7f,
++};
++
++#define MSM_PARAM_GPU_ID        0x01
++#define MSM_PARAM_GMU_FEATURE   0x02
++#define MSM_PARAM_CHIP_ID       0x03
++#define MSM_PARAM_MAX_FREQ      0x04
++#define MSM_PARAM_TIMESTAMP     0x05
++#define MSM_PARAM_VA_START      0x06
++#define MSM_PARAM_VA_SIZE       0x07
++
++#define MSM_INFO_GET_OFFSET     0
++#define MSM_INFO_GET_IOVA       1
++#define MSM_INFO_SET_NAME       2
++#define MSM_INFO_GET_FLAGS      5
++
++#define GPU_BUFFERS             1024
++#define GPU_VA_BASE             0x100000000ULL
++#define GPU_VA_STRIDE           0x001000000ULL /* 16 MB per buffer VA slot */
++
++struct msm_timespec {
++	int64_t seconds;
++	int64_t nanoseconds;
++};
++
++struct msm_param {
++	uint32_t pipe;
++	uint32_t param;
++	uint64_t value;
++	uint32_t len;
++	uint32_t pad;
++};
++
++struct msm_gem_new {
++	uint64_t size;
++	uint32_t flags;
++	uint32_t handle;
++};
++
++struct msm_gem_info {
++	uint32_t handle;
++	uint32_t info;
++	uint64_t value;
++	uint32_t len;
++	uint32_t pad;
++};
++
++struct msm_gem_cpu_prep {
++	uint32_t handle;
++	uint32_t op;
++	struct msm_timespec timeout;
++};
++
++struct msm_gem_submit {
++	uint32_t flags;
++	uint32_t fence;
++	uint32_t nr_bos;
++	uint32_t nr_cmds;
++	uint64_t bos;
++	uint64_t cmds;
++	int32_t  fence_fd;
++	uint32_t queueid;
++	uint64_t in_syncobjs;
++	uint64_t out_syncobjs;
++	uint32_t nr_in_syncobjs;
++	uint32_t nr_out_syncobjs;
++	uint32_t syncobj_stride;
++	uint32_t pad;
++};
++
++struct msm_wait_fence {
++	uint32_t fence;
++	uint32_t flags;
++	struct msm_timespec timeout;
++	uint32_t queueid;
++};
++
++struct msm_gem_madvise {
++	uint32_t handle;
++	uint32_t madv;
++	uint32_t retained;
++};
++
++struct msm_submitqueue {
++	uint32_t flags;
++	uint32_t prio;
++	uint32_t id;
++};
++
++struct msm_submitqueue_query {
++	uint64_t data;
++	uint32_t id;
++	uint32_t param;
++	uint32_t len;
++	uint32_t pad;
++};
++
++struct drm_gem_close {
++	uint32_t handle;
++	uint32_t pad;
++};
++
++struct hakios_surface {
++	uint32_t surface;
++	uint32_t handle;
++	uint64_t size;
++	uint32_t offset;
++	uint32_t rowBytes;
++	uint32_t width;
++	uint32_t height;
++	uint32_t pixelFormat;
++	uint32_t planes;
++};
++
++struct hakios_show {
++	uint64_t pixels;
++	uint32_t width;
++	uint32_t height;
++	uint32_t rowBytes;
++	uint32_t pad;
++};
++
++struct sweet_gem_buffer {
++	uint32_t                  handle;
++	uint64_t                  address;
++	uint64_t                  size;
++	uint32_t                  flags;
++	IOBufferMemoryDescriptor *memory;
++	void                     *kva;
++};
 +
 +class SweetAccelerator : public IOService {
 +	OSDeclareDefaultStructors(SweetAccelerator);
@@ -235,7 +377,6 @@
 +			prev_src = src;
 +		}
 +		if (max_idx == 0) {
-+			/* Fallback OPP: Silver idx 14 (~1.78 GHz), Gold/Prime/L3 idx 15 (~2.42-2.84 GHz) */
 +			max_idx = (d == 1) ? 14 : 15;
 +			max_lval = (d == 1) ? 93 : 148;
 +		}
@@ -251,21 +392,19 @@
 +bool
 +SweetAccelerator::powerOnGPU()
 +{
-+	/* Map GPU Clock Controller (GPUCC) at 0x02C90000 */
 +	fGpuccBase = (volatile uint32_t *)ml_io_map(ADRENO_GPUCC_BASE_PHYS, ADRENO_GPUCC_SIZE);
 +	if (fGpuccBase == NULL) {
 +		IOLog("SWEET GPU: Failed to map GPUCC\n");
 +		return false;
 +	}
 +
-+	/* Hardware Power-up Sequence */
 +	volatile uint32_t *cx_gdsc = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_CX_GDSC_OFFSET);
 +	volatile uint32_t *gx_gdsc = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_GX_GDSC_OFFSET);
 +	volatile uint32_t *ahb_clk = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_AHB_CLK_OFFSET);
 +	volatile uint32_t *gmu_clk = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_CX_GMU_OFFSET);
 +	volatile uint32_t *gfx_clk = (volatile uint32_t *)((uintptr_t)fGpuccBase + GPUCC_GX_GFX3D_OFFSET);
 +
-+	/* Step 1: Enable CX GDSC */
++	/* Enable CX GDSC */
 +	*cx_gdsc |= 1;
 +	__asm__ volatile("dsb sy" ::: "memory");
 +	for (int i = 0; i < 5000; i++) {
@@ -273,12 +412,12 @@
 +		IODelay(1);
 +	}
 +
-+	/* Step 2 & 3: Enable AHB and GMU branch clocks */
++	/* Enable AHB and GMU branch clocks */
 +	*ahb_clk |= 1;
 +	*gmu_clk |= 1;
 +	__asm__ volatile("dsb sy" ::: "memory");
 +
-+	/* Step 4: Enable GX GDSC (3D graphics core) */
++	/* Enable GX GDSC (3D graphics core) */
 +	*gx_gdsc |= 1;
 +	__asm__ volatile("dsb sy" ::: "memory");
 +	for (int i = 0; i < 5000; i++) {
@@ -286,7 +425,7 @@
 +		IODelay(1);
 +	}
 +
-+	/* Step 5: Enable GFX3D core clock */
++	/* Enable GFX3D core clock */
 +	*gfx_clk |= 1;
 +	__asm__ volatile("dsb sy" ::: "memory");
 +
@@ -326,7 +465,8 @@
 +	setProperty("IOGPUFamily", "Generic");
 +	setProperty("IOGPUGL", kOSBooleanTrue);
 +	setProperty("IOGPUMetal", kOSBooleanTrue);
-+	setProperty("MetalPluginName", "SweetAccelerator");
++	setProperty("MetalPluginName", "HakiosMetal");
++	setProperty("MetalPluginClassName", "HakiosMetalDevice");
 +	setProperty("IOGPUNumCommandQueues", 4ULL, 32);
 +	setProperty("IOGPUMaxSurfaces", 64ULL, 32);
 +	setProperty("IOGPUGlobalSharedStorageSize", 0x10000000ULL, 64);
@@ -348,15 +488,27 @@
 +	OSDeclareDefaultStructors(SweetAcceleratorUserClient);
 +
 +public:
-+	SweetAccelerator *fDriver;
-+	task_t            fTask;
++	SweetAccelerator        *fDriver;
++	task_t                   fTask;
++	struct sweet_gem_buffer *fBuffers;
++	IOLock                  *fLock;
++	uint32_t                 fLastFence;
++	uint32_t                 fNextQueue;
 +
 +	bool initWithTask(task_t owningTask, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
 +	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
++	void free() APPLE_KEXT_OVERRIDE;
 +	IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
++	IOReturn clientMemoryForType(UInt32 type, IOOptionBits *options,
++	    IOMemoryDescriptor **memory) APPLE_KEXT_OVERRIDE;
 +	IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments *args,
 +	    IOExternalMethodDispatch *dispatch, OSObject *target,
 +	    void *reference) APPLE_KEXT_OVERRIDE;
++
++	struct sweet_gem_buffer *findBuffer(uint32_t handle);
++	IOReturn gemNew(struct msm_gem_new *req);
++	IOReturn gemInfo(struct msm_gem_info *req);
++	IOReturn gemClose(uint32_t handle);
 +};
 +
 +OSDefineMetaClassAndStructors(SweetAcceleratorUserClient, IOUserClient);
@@ -369,7 +521,11 @@
 +	}
 +	fTask = owningTask;
 +	fDriver = NULL;
-+	return true;
++	fLastFence = 0;
++	fNextQueue = 0;
++	fLock = IOLockAlloc();
++	fBuffers = (struct sweet_gem_buffer *)IOMallocZero(sizeof(struct sweet_gem_buffer) * GPU_BUFFERS);
++	return (fBuffers != NULL && fLock != NULL);
 +}
 +
 +bool
@@ -382,10 +538,157 @@
 +	return true;
 +}
 +
++void
++SweetAcceleratorUserClient::free()
++{
++	if (fBuffers != NULL) {
++		for (uint32_t i = 1; i < GPU_BUFFERS; i++) {
++			if (fBuffers[i].memory != NULL) {
++				fBuffers[i].memory->release();
++				fBuffers[i].memory = NULL;
++			}
++		}
++		IOFree(fBuffers, sizeof(struct sweet_gem_buffer) * GPU_BUFFERS);
++		fBuffers = NULL;
++	}
++	if (fLock != NULL) {
++		IOLockFree(fLock);
++		fLock = NULL;
++	}
++	IOUserClient::free();
++}
++
 +IOReturn
 +SweetAcceleratorUserClient::clientClose(void)
 +{
 +	terminate();
++	return kIOReturnSuccess;
++}
++
++struct sweet_gem_buffer *
++SweetAcceleratorUserClient::findBuffer(uint32_t handle)
++{
++	if (handle >= 1 && handle < GPU_BUFFERS && fBuffers[handle].memory != NULL) {
++		return &fBuffers[handle];
++	}
++	return NULL;
++}
++
++IOReturn
++SweetAcceleratorUserClient::clientMemoryForType(UInt32 type, IOOptionBits *options,
++    IOMemoryDescriptor **memory)
++{
++	if (options) {
++		*options = 0;
++	}
++	if (memory == NULL) {
++		return kIOReturnBadArgument;
++	}
++	*memory = NULL;
++
++	IOLockLock(fLock);
++	struct sweet_gem_buffer *b = findBuffer(type);
++	if (b == NULL || b->memory == NULL) {
++		IOLockUnlock(fLock);
++		return kIOReturnBadArgument;
++	}
++	*memory = b->memory;
++	(*memory)->retain();
++	IOLockUnlock(fLock);
++	return kIOReturnSuccess;
++}
++
++IOReturn
++SweetAcceleratorUserClient::gemNew(struct msm_gem_new *req)
++{
++	if (req == NULL || req->size == 0 || req->size > (256ULL << 20)) {
++		return kIOReturnBadArgument;
++	}
++	uint64_t size = round_page(req->size);
++
++	IOLockLock(fLock);
++	uint32_t handle = 0;
++	for (uint32_t i = 1; i < GPU_BUFFERS; i++) {
++		if (fBuffers[i].memory == NULL) {
++			handle = i;
++			break;
++		}
++	}
++	if (handle == 0) {
++		IOLockUnlock(fLock);
++		return kIOReturnNoMemory;
++	}
++
++	IOBufferMemoryDescriptor *mem = IOBufferMemoryDescriptor::inTaskWithOptions(
++	    kernel_task, kIODirectionInOut | kIOMemoryKernelUserShared, size, PAGE_SIZE);
++	if (mem == NULL) {
++		IOLockUnlock(fLock);
++		return kIOReturnNoMemory;
++	}
++
++	void *kva = mem->getBytesNoCopy();
++	if (kva != NULL) {
++		bzero(kva, size);
++	}
++
++	struct sweet_gem_buffer *b = &fBuffers[handle];
++	b->handle = handle;
++	b->size = size;
++	b->flags = req->flags;
++	b->memory = mem;
++	b->kva = kva;
++	b->address = GPU_VA_BASE + (uint64_t)handle * GPU_VA_STRIDE;
++
++	req->handle = handle;
++	IOLockUnlock(fLock);
++	return kIOReturnSuccess;
++}
++
++IOReturn
++SweetAcceleratorUserClient::gemInfo(struct msm_gem_info *req)
++{
++	if (req == NULL) {
++		return kIOReturnBadArgument;
++	}
++	IOLockLock(fLock);
++	struct sweet_gem_buffer *b = findBuffer(req->handle);
++	if (b == NULL) {
++		IOLockUnlock(fLock);
++		return kIOReturnBadArgument;
++	}
++	switch (req->info) {
++	case MSM_INFO_GET_OFFSET:
++		req->value = req->handle;
++		break;
++	case MSM_INFO_GET_IOVA:
++		req->value = b->address;
++		break;
++	case MSM_INFO_GET_FLAGS:
++		req->value = b->flags;
++		break;
++	default:
++		req->value = 0;
++		break;
++	}
++	IOLockUnlock(fLock);
++	return kIOReturnSuccess;
++}
++
++IOReturn
++SweetAcceleratorUserClient::gemClose(uint32_t handle)
++{
++	IOLockLock(fLock);
++	struct sweet_gem_buffer *b = findBuffer(handle);
++	if (b == NULL) {
++		IOLockUnlock(fLock);
++		return kIOReturnBadArgument;
++	}
++	if (b->memory != NULL) {
++		b->memory->release();
++		b->memory = NULL;
++	}
++	bzero(b, sizeof(*b));
++	IOLockUnlock(fLock);
 +	return kIOReturnSuccess;
 +}
 +
@@ -394,46 +697,213 @@
 +    __unused IOExternalMethodDispatch *dispatch, __unused OSObject *target,
 +    __unused void *reference)
 +{
-+	if (args->scalarOutputCount > 0) {
++	if (args == NULL) {
++		return kIOReturnBadArgument;
++	}
++
++	/* Zero scalar and structure outputs by default */
++	if (args->scalarOutputCount > 0 && args->scalarOutput != NULL) {
 +		for (uint32_t i = 0; i < args->scalarOutputCount; i++) {
 +			args->scalarOutput[i] = 0;
 +		}
 +	}
-+	if (args->structureOutputDescriptor == NULL && args->structureOutput != NULL) {
++	if (args->structureOutputDescriptor == NULL && args->structureOutput != NULL && args->structureOutputSize > 0) {
 +		bzero(args->structureOutput, args->structureOutputSize);
 +	}
 +
++	/* 1. Linux MSM DRM / freedreno requests */
 +	switch (selector) {
-+	case 0:
-+		if (args->scalarOutputCount > 0) {
-+			args->scalarOutput[0] = 1;
++	case kMsmGetParam: {
++		if (args->structureInput == NULL || args->structureInputSize < sizeof(struct msm_param)) {
++			return kIOReturnBadArgument;
 +		}
-+		break;
-+	case 1:
-+		break;
++		struct msm_param p;
++		memcpy(&p, args->structureInput, sizeof(p));
++		switch (p.param) {
++		case MSM_PARAM_GPU_ID:
++			p.value = 640;
++			break;
++		case MSM_PARAM_CHIP_ID:
++			p.value = CHIP_ID_ADRENO_640;
++			break;
++		case MSM_PARAM_MAX_FREQ:
++			p.value = 585000000ULL;
++			break;
++		case MSM_PARAM_TIMESTAMP:
++			p.value = mach_absolute_time();
++			break;
++		case MSM_PARAM_VA_START:
++			p.value = GPU_VA_BASE;
++			break;
++		case MSM_PARAM_VA_SIZE:
++			p.value = 0x400000000ULL;
++			break;
++		default:
++			p.value = 0;
++			break;
++		}
++		if (args->structureOutput != NULL && args->structureOutputSize >= sizeof(p)) {
++			memcpy(args->structureOutput, &p, sizeof(p));
++		}
++		return kIOReturnSuccess;
++	}
++	case kMsmGemNew: {
++		if (args->structureInput == NULL || args->structureInputSize < sizeof(struct msm_gem_new)) {
++			return kIOReturnBadArgument;
++		}
++		struct msm_gem_new req;
++		memcpy(&req, args->structureInput, sizeof(req));
++		IOReturn ret = gemNew(&req);
++		if (ret == kIOReturnSuccess && args->structureOutput != NULL && args->structureOutputSize >= sizeof(req)) {
++			memcpy(args->structureOutput, &req, sizeof(req));
++		}
++		return ret;
++	}
++	case kMsmGemInfo: {
++		if (args->structureInput == NULL || args->structureInputSize < sizeof(struct msm_gem_info)) {
++			return kIOReturnBadArgument;
++		}
++		struct msm_gem_info req;
++		memcpy(&req, args->structureInput, sizeof(req));
++		IOReturn ret = gemInfo(&req);
++		if (ret == kIOReturnSuccess && args->structureOutput != NULL && args->structureOutputSize >= sizeof(req)) {
++			memcpy(args->structureOutput, &req, sizeof(req));
++		}
++		return ret;
++	}
++	case kMsmGemCpuPrep: {
++		if (args->structureInput == NULL || args->structureInputSize < sizeof(struct msm_gem_cpu_prep)) {
++			return kIOReturnBadArgument;
++		}
++		struct msm_gem_cpu_prep req;
++		memcpy(&req, args->structureInput, sizeof(req));
++		IOLockLock(fLock);
++		struct sweet_gem_buffer *b = findBuffer(req.handle);
++		if (b != NULL && b->kva != NULL) {
++			/* Clean and invalidate data cache */
++			uintptr_t p = (uintptr_t)b->kva;
++			uintptr_t end = p + b->size;
++			while (p < end) {
++				__asm__ volatile("dc civac, %0" : : "r"(p) : "memory");
++				p += 64;
++			}
++			__asm__ volatile("dsb ish" ::: "memory");
++		}
++		IOLockUnlock(fLock);
++		return kIOReturnSuccess;
++	}
++	case kMsmGemCpuFini:
++	case kMsmSetParam:
++	case kMsmSubmitQueueClose:
++		return kIOReturnSuccess;
++
++	case kMsmGemSubmit: {
++		if (args->structureInput == NULL || args->structureInputSize < sizeof(struct msm_gem_submit)) {
++			return kIOReturnBadArgument;
++		}
++		struct msm_gem_submit req;
++		memcpy(&req, args->structureInput, sizeof(req));
++		IOLockLock(fLock);
++		req.fence = ++fLastFence;
++		IOLockUnlock(fLock);
++		if (args->structureOutput != NULL && args->structureOutputSize >= sizeof(req)) {
++			memcpy(args->structureOutput, &req, sizeof(req));
++		}
++		return kIOReturnSuccess;
++	}
++	case kMsmWaitFence: {
++		if (args->structureInput == NULL || args->structureInputSize < sizeof(struct msm_wait_fence)) {
++			return kIOReturnBadArgument;
++		}
++		struct msm_wait_fence req;
++		memcpy(&req, args->structureInput, sizeof(req));
++		if ((int32_t)(req.fence - fLastFence) > 0) {
++			return kIOReturnBadArgument;
++		}
++		return kIOReturnSuccess;
++	}
++	case kMsmSubmitQueueNew: {
++		if (args->structureInput != NULL && args->structureInputSize >= sizeof(struct msm_submitqueue)) {
++			struct msm_submitqueue q;
++			memcpy(&q, args->structureInput, sizeof(q));
++			q.id = ++fNextQueue;
++			if (args->structureOutput != NULL && args->structureOutputSize >= sizeof(q)) {
++				memcpy(args->structureOutput, &q, sizeof(q));
++			}
++		}
++		return kIOReturnSuccess;
++	}
++	case kMsmSubmitQueueQuery: {
++		if (args->structureInput != NULL && args->structureInputSize >= sizeof(struct msm_submitqueue_query)) {
++			struct msm_submitqueue_query q;
++			memcpy(&q, args->structureInput, sizeof(q));
++			uint64_t zero = 0;
++			if (q.data != 0 && q.len >= sizeof(zero)) {
++				copyout(&zero, (user_addr_t)q.data, sizeof(zero));
++			}
++		}
++		return kIOReturnSuccess;
++	}
++	case kDrmGemClose: {
++		if (args->structureInput == NULL || args->structureInputSize < sizeof(struct drm_gem_close)) {
++			return kIOReturnBadArgument;
++		}
++		struct drm_gem_close req;
++		memcpy(&req, args->structureInput, sizeof(req));
++		return gemClose(req.handle);
++	}
++	case kHakiosSurface: {
++		if (args->structureInput == NULL || args->structureInputSize < sizeof(struct hakios_surface)) {
++			return kIOReturnBadArgument;
++		}
++		struct hakios_surface req;
++		memcpy(&req, args->structureInput, sizeof(req));
++		/* Wrap or describe IOSurface */
++		req.handle = 1; /* default surface slot */
++		req.offset = 0;
++		req.rowBytes = 1080 * 4;
++		req.width = 1080;
++		req.height = 2340;
++		req.size = (uint64_t)req.rowBytes * req.height;
++		req.pixelFormat = 0x42475241; /* BGRA */
++		req.planes = 1;
++		if (args->structureOutput != NULL && args->structureOutputSize >= sizeof(req)) {
++			memcpy(args->structureOutput, &req, sizeof(req));
++		}
++		return kIOReturnSuccess;
++	}
++	case kHakiosShow:
++		return kIOReturnSuccess;
++
++	/* 2. Apple legacy IOAccelerator selectors */
++	case 0:
 +	case 2:
 +		if (args->scalarOutputCount > 0) {
 +			args->scalarOutput[0] = 1;
 +		}
-+		break;
++		return kIOReturnSuccess;
++	case 1:
++		return kIOReturnSuccess;
 +	case 7:
 +		if (args->scalarOutputCount >= 2) {
 +			args->scalarOutput[0] = CHIP_ID_ADRENO_640;
 +			args->scalarOutput[1] = 0x00010000;
 +		}
-+		break;
-+	case 9:
++		return kIOReturnSuccess;
++	
 +		if (args->scalarOutputCount > 0) {
 +			args->scalarOutput[0] = 0x1000;
 +		}
-+		break;
++		return kIOReturnSuccess;
 +	case 12:
 +	case 14:
 +	case 17:
 +	case 20:
++		return kIOReturnSuccess;
 +	default:
 +		break;
 +	}
++
 +	return kIOReturnSuccess;
 +}
 +#endif /* SWEET */
