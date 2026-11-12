@@ -41,7 +41,7 @@
  #if defined(SWEET)
  #include <IOKit/IOService.h>
  #include <IOKit/IOUserClient.h>
-@@ -290,9 +292,6 @@
+@@ -290,9 +292,4 @@
 -		int quiet = 0;
  		fConsolePaused = true;
 -		if (PE_parse_boot_argn("sweetfb_noconsole", &quiet, sizeof(quiet)) && quiet != 0) {
