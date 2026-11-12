@@ -2,6 +2,19 @@
 
 ## Active handoff update (2026-11-12)
 
+**🚀 SHIM-BOOT-0101 BUILT & LIVE BOOTED: CLEAN SCREEN BOOT (CONSOLE LOGS MUTED VIA `sweetfb_noconsole=1`, REMOVED KPRINTF SPAM & SERIAL=3)**
+- **User Request:**
+  - "tôi muốn bỏ các dòng log đó ra" (Remove console text from drawing over the screen).
+- **Implementation in `0101`:**
+  - Removed verbose debugging boot-args: `-enable_kprintf_spam`, `serial=3`, `-noprogress`, `debug=0xc`.
+  - Added clean boot-args: `sweetfb_noconsole=1` (mutes console output drawing to screen via patch 0067 `sweet_console_muted`), `debug=0x1` (panic-only).
+  - Clean cmdline: `debug=0x1 cpus=1 keepsyms=1 sweetfb_noconsole=1 rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin ufsrw=1 rootrw=1 launchd_unsecure_cache=1 wdt=-1 sweettouchdelay=0`.
+  - Packaged [`shim/out/shim-boot-0101.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0101.img) (27 MiB).
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0101.img`:
+    - `Sending 'boot.img' (27900 KB) OKAY [0.660s]`
+    - `Booting OKAY [0.081s]`
+    - `Finished. Total time: 0.753s`
+
 **🚀 SHIM-BOOT-0100: HAKIOSMETAL ROOTFS DEPLOYMENT + IOPMPOWER SOURCE ADAPTER DETAILS & CAPACITY + SPRINGBOARD UI LITE & VIBRANCY OPTIMIZATION**
 - **User Request:**
   - "1. Deploy HakiosMetal.bundle vào rootfs"
