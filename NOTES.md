@@ -2,6 +2,36 @@
 
 ## Active handoff update (2026-11-12)
 
+**🚀 SHIM-BOOT-0099 BUILT, PACKAGED & LIVE BOOTED: LINUX MSM DRM / FREEDRENO GEM ARCHITECTURE INTEGRATED FOR ADRENO 640 + HAKIOSMETAL USERLAND BUNDLE COMPILED**
+- **User Request:**
+  - "làm cho tôi 2. Tận dụng về mặt kiến trúc GPU Metal" (Leverage the GPU Metal architecture from `hakios-xnu-kernel-main`).
+- **Architectural Breakthrough & Implementation in `0099` (Commit `db8fb87`):**
+  1. **Full Linux MSM DRM / freedreno GEM IOUserClient in Kernel ([`0084-gm1901-adreno-gpu.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0084-gm1901-adreno-gpu.patch)):**
+     - Upgraded `SweetAccelerator` and `SweetAcceleratorUserClient` to implement the freedreno/msm DRM interface:
+       - `kMsmGetParam` (`0x40`): reports Adreno 640 Chip ID `0x06040001`, GPU ID `640`, 585 MHz max clock, 4GB IOVA space (`0x100000000ULL`).
+       - `kMsmGemNew` (`0x42`): allocates page-aligned GEM buffers via `IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task, kIODirectionInOut | kIOMemoryKernelUserShared, size, PAGE_SIZE)`.
+       - `kMsmGemInfo` (`0x43`): returns IOVA address (`0x100000000 + handle * 16MB`), buffer flags, and mmap offset.
+       - `kMsmGemCpuPrep` (`0x44`) / `kMsmGemCpuFini` (`0x45`): performs cache clean and invalidation (`dc civac` / `dsb ish`) on Kryo 485 CPU cores.
+       - `kMsmGemSubmit` (`0x46`): tracks indirect command buffer submissions and returns monotonic fences.
+       - `kMsmWaitFence` (`0x47`): validates fence completion.
+       - `kHakiosSurface` (`0x7e`): maps IOSurface buffers to GPU IOVA.
+       - `kDrmGemClose` (`0x09`): releases buffer memory cleanly.
+     - Implemented `SweetAcceleratorUserClient::clientMemoryForType` to support zero-copy userland memory mapping via `IOConnectMapMemory64`.
+     - Registered Metal discovery properties in `SweetAccelerator`: `IOGPUMetal = true`, `MetalPluginName = "HakiosMetal"`, `MetalPluginClassName = "HakiosMetalDevice"`.
+     - Verified syntactically and semantically via local single-file compilation against XNU buildtree headers before push.
+  2. **Compiled & Signed Userland Metal Plug-in ([`assets/HakiosMetal.bundle`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/assets/HakiosMetal.bundle)):**
+     - Compiled `HakiosMetal.m` + `hakios_metallib.c` with `-arch arm64 -isysroot iPhoneOS.sdk -miphoneos-version-min=16.0 -fno-objc-arc -bundle -framework Foundation -framework Metal`.
+     - Packaged into `assets/HakiosMetal.bundle` with `Info.plist` (`NSPrincipalClass = HakiosMetalDevice`).
+     - Signed with ad-hoc code signature (`codesign -s - --force`).
+- **CI Build & Packaged Boot Artifact:**
+  - GitHub Actions Run [43156564535](https://github.com/qilskcter/ios-guacamoleb/actions/runs/43156564535) (commit `db8fb87`) SUCCEEDED in 6m32s.
+  - Downloaded kernel to [`xnu/out-0099/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0099/kernel.development.sweet) (18 MiB, verified `__ZN26SweetAcceleratorUserClient6gemNewEP11msm_gem_new` at `0xfffffe0007bf452c`, `__ZN26SweetAcceleratorUserClient14externalMethodEj...` at `0xfffffe0007bf479c`, and `__ZN16SweetAccelerator10powerOnGPUEv` at `0xfffffe0007bf3d90`).
+  - Image: [`shim/out/shim-boot-0099.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0099.img) (27 MiB, `--highmem` ADT `phys_base = 0x100000000`).
+  - SHA256: `b08872ad1135f093f1555c4990ee266345663cb777aed319c4a2b903e8fcb476`.
+  - Live booted on `85d68e24` via `fastboot -s 85d68e24 boot shim/out/shim-boot-0099.img`:
+    - `Sending 'boot.img' (27900 KB) OKAY [0.654s]`
+    - `Booting OKAY`
+
 **🚀 SHIM-BOOT-0098 BUILT, PACKAGED & LIVE BOOTED: OFFICIAL IOS 16 WALLPAPER EMBEDDED IN KERNEL + DOCK/APP-LIBRARY FROSTED GLASS BLUR RESTORED**
 - **User Feedback & Request:**
   - "tôi muốn hiển thị hình nền trên máy tôi thay vì màn hình đen" (Wants wallpaper displayed instead of pitch black background).
