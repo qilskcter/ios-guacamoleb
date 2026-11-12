@@ -2,7 +2,39 @@
 
 ## Active handoff update (2026-11-12)
 
-**🚀 SHIM-BOOT-0105 BUILT & LIVE BOOTED: IMMEDIATE STARTUP WALLPAPER PAINT + STRIDE-AGNOSTIC EMPTY BACKDROP INJECTION**
+**🚀 SHIM-BOOT-0106: KERNEL EXEC_INJECT (SPRINGBOARD DYLD INJECTION) + POSTER SWITCHER SUPPRESSION + FULL-BLEED IOS 16 WWDC WALLPAPER + 180PX TOUCH EDGE GESTURES**
+- **User Feedback & Photo Evidence (`uploaded_media_1794480457248.jpg` & `uploaded_media_1794477423398.jpg`):**
+  - "màn hình bị đè lên 1 lớp như vậy" / "nhưng nó là 1 lớp layout đè lên màn hình chứ không phải hình nền" (Screen covered by an overlaid layer, not wallpaper).
+  - "tôi vuốt nó hiện màn hình icon xong lại hiển thị lại ảnh đó" (When swiped, the icons screen flashes then immediately snaps back to the lockscreen/wallpaper image).
+  - "tôi làm gì ở lockscreen nó cũng hiển thị ảnh đó sau khi thực hiện 1 thao tác" (Whatever is done on lockscreen, it snaps back after 1 gesture).
+  - Photos confirmed:
+    1. Lockscreen showed the sunset sky on the top half, but the lower 40% was pitch black (`uploaded_media_1794480457248.jpg`).
+    2. Tap/long-press opened the iOS 16 Poster Switcher gallery titled "Thêm hình nền mới" with an 'X' button (`uploaded_media_1794477423398.jpg`).
+- **Exhaustive Root Cause Analysis:**
+  1. **Pitch-black lower 40% of the wallpaper:**
+     - Decompressing and sampling `wallpaper.lz4` row by row revealed that the stock mountain photo faded to pure pitch black (`R=0.7..1.3, G=1.0..3.7, B=1.0..4.4`) below row 1600. On the OnePlus 7 AMOLED display, rows 1600–2340 were physically turned off, giving the illusion of an opaque black layout box covering the wallpaper.
+  2. **Poster Switcher & "Thêm hình nền mới" modal loop:**
+     - In iOS 16, CoverSheet long-presses and touches trigger `CSPosterSwitcherViewController` (`PosterBoard.app`). Without GPU rendering, PosterBoard cannot draw its interactive gallery items, showing an empty sheet titled "Thêm hình nền mới".
+     - While in poster editing state, any unlock gesture is cancelled and CoverSheet snaps right back.
+  3. **Swipe-up failing to commit unlock (`SWEET_TOUCH_EDGE_PX = 48`):**
+     - In `SweetHID.cpp`, edge detection used `SWEET_TOUCH_EDGE_PX 48` (`y > 2339 - 48 = 2291`). That is only **3.1 mm** from the bottom glass edge.
+     - Natural thumb swipes starting at y=2180..2280 (~8–15 mm from chin) were never tagged with `kIOHIDDigitizerEventFromEdgeTip`. UIKit and SpringBoard treated them as ordinary internal lockscreen scroll drags, snapping back down upon release instead of committing the Home/Unlock transition.
+  4. **Missing `kern.exec_inject` in Kernel:**
+     - Although `/usr/lib/libhakios.sb.dylib` had been deployed to the rootfs in Milestone 0100, the kernel lacked `kern.exec_inject`.
+     - Consequently, `libhakios.sb.dylib` was never injected into `SpringBoard`, leaving `SBMainDisplayPolicyAggregator _allowsCapabilityPosterSwitcherWithExplanation:` unhooked (returning `YES`), and preventing the 10-second automatic unlock fallback.
+- **Implementation & Resolution in Milestone 0106:**
+  1. **Kernel `kern.exec_inject` ([`xnu/patches/0086-sweet-exec-inject.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0086-sweet-exec-inject.patch)):**
+     - Added `sysctl kern.exec_inject` and `exec_inject_env()` in `bsd/kern/kern_exec.c`.
+     - Default configuration: `"/usr/lib/libhakios.sb.dylib SpringBoard"` (configurable via `exec_inject` boot-arg, toggleable via `sbinject=1/0`).
+     - Injects `DYLD_INSERT_LIBRARIES=/usr/lib/libhakios.sb.dylib` when SpringBoard launches.
+     - `libhakios.sb.dylib` permanently disables PosterBoard (`poster_switcher_allowed` -> `NO`) and automatically unlocks into Home Screen after 10 seconds.
+  2. **Expanded Touch Edge Margins ([`xnu/patches/0082-gm1901-drivers.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0082-gm1901-drivers.patch)):**
+     - Increased `SWEET_TOUCH_EDGE_PX` from `48` to `180` pixels (~12 mm).
+     - Any swipe starting within the bottom 180 pixels (`y > 2159`) is instantly tagged with `kIOHIDDigitizerEventFromEdgeTip`, reliably triggering the iPhone X Home/Unlock gesture.
+  3. **Full-Bleed Official iOS 16 WWDC Wallpaper ([`xnu/patches/wallpaper.lz4`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/wallpaper.lz4) & [`xnu/patches/0083-sweet-fb-bulk-copy.patch`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/patches/0083-sweet-fb-bulk-copy.patch)):**
+     - Replaced the dark mountain image with Apple's authentic WWDC 2022 flowing ribbon wallpaper (1170x2532 resized to 1080x2340 BGRA).
+     - High-compression LZ4 payload (4,743,743 bytes) with continuous vibrant color from row 0 (deep blue) to row 1400 (amber glow) and row 2340 (bright emerald/forest green). Zero black rows across the entire canvas.
+     - Updated `.long 4743743` in `0083` and refreshed all `.cpbitmap` and JPEG thumbnails in `assets/springboard/`.
 - **User Feedback & Photo Evidence (`uploaded_media_1794477423398.jpg`):**
   - "đúng ý của tôi rồi nhưng hình nền tôi thấy chưa có" / "tất cả đều bình thường chỉ có trong phần hình nền không có gì".
   - Photo showed clean iOS 16 UI with zero console text, AssistiveTouch, and "Thêm hình nền mới" sheet, but the background was plain/black.
