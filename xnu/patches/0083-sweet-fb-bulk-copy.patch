@@ -1,5 +1,5 @@
 diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
-index d997c77..2c54345 100644
+index 277f145..99201b6 100644
 --- a/iokit/Kernel/arm/SweetFramebuffer.cpp
 +++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
 @@ -148,6 +148,65 @@ public:
@@ -89,7 +89,7 @@ index d997c77..2c54345 100644
  
  	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
  	setProperty("external", false);
-@@ -289,15 +356,75 @@ static uint64_t sweet_fb_swap_count;
+@@ -289,15 +357,75 @@ static uint64_t sweet_fb_swap_count;
  void
  AppleCLCD::swap(const uint8_t *rec)
  {
@@ -166,15 +166,15 @@ index d997c77..2c54345 100644
  void
  AppleCLCD::present(const uint8_t *rec)
  {
-@@ -314,6 +441,7 @@ AppleCLCD::present(const uint8_t *rec)
- 		}
+@@ -309,6 +437,7 @@ AppleCLCD::present(const uint8_t *rec)
+ 		sweet_console_muted = 1;
  	}
  
 +	SweetSurface *layer0_surf = NULL;
  	for (uint32_t layer = 0; layer < SWEET_FB_LAYERS; layer++) {
  		uint32_t id = get32(rec, 0x54 + 4 * layer);
  		const uint8_t *a = rec + 0x64 + 16 * layer;
-@@ -381,14 +509,87 @@ AppleCLCD::present(const uint8_t *rec)
+@@ -376,14 +505,87 @@ AppleCLCD::present(const uint8_t *rec)
  			src = 0;
  		}
  		if (src != 0 && bpe == 4) {
@@ -266,7 +266,7 @@ index d997c77..2c54345 100644
  }
  
  bool
-@@ -460,6 +661,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
+@@ -455,6 +657,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
  }
  
  static uint64_t sweet_fb_logged;        /* selectors already logged (< 64) */
@@ -274,7 +274,7 @@ index d997c77..2c54345 100644
  
  IOReturn
  IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-@@ -476,6 +678,7 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -471,6 +674,7 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
  		outCount = 1;
  		break;
  	case kSweetFBSwapBegin:
