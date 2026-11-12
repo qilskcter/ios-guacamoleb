@@ -68,7 +68,7 @@ index d997c77..2c54345 100644
  bool
  AppleCLCD::start(IOService *provider)
  {
-@@ -191,10 +250,18 @@ AppleCLCD::start(IOService *provider)
+@@ -191,10 +250,19 @@ AppleCLCD::start(IOService *provider)
  		IOLog("SWEET FB: no vsync timer\n");
  		return false;
  	}
@@ -85,6 +85,7 @@ index d997c77..2c54345 100644
 +			IOLog("SWEET FB: loaded iOS 16 wallpaper (10108800 bytes)\n");
 +		}
 +	}
++	sweet_console_muted = 1;
  
  	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
  	setProperty("external", false);
