@@ -36,7 +36,13 @@
     ```
   - For every pixel where SpringBoard has black background (`(px & 0x00ffffff) == 0`), the official WWDC 2022 wallpaper is shown.
   - For every pixel where SpringBoard rendered content (white clock, date, lock icon, AssistiveTouch, app icons, widgets), the UI pixel is preserved!
-  - Commit `d524d6d` pushed to `main`; triggered GitHub Actions CI run `43828829497`.
+  - Commit `d524d6d` pushed to `main`; GitHub Actions CI run `43828826164` SUCCEEDED in 9m31s.
+  - Downloaded kernel to [`xnu/out-0108/kernel.development.sweet`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/xnu/out-0108/kernel.development.sweet) (21 MiB).
+  - Verified symbols via `nm`: `_sweet_wallpaper_comp` (4.74 MB), `SweetHIDTouch`, `SweetHIDButtons`, and `_sweet_keys_init` present.
+  - Packaged [`shim/out/shim-boot-0108.img`](file:///Users/nguyendinhkhanh/Documents/GitHub/ios-sweet/shim/out/shim-boot-0108.img) (30 MiB).
+  - Live booted on OnePlus 7 (`85d68e24`) via `fastboot boot shim/out/shim-boot-0108.img`:
+    - `Sending 'boot.img' (30956 KB) OKAY`
+    - `Booting OKAY`
 
 **🚀 SHIM-BOOT-0107 BUILT & LIVE BOOTED: CLEAN GM1901 HARDWARE DRIVERS RESTORED + EXPANDED 180PX BOTTOM TOUCH EDGE GESTURES + FULL-BLEED OFFICIAL IOS 16 WWDC WALLPAPER**
 - **User Feedback & Problem Analysis:**
