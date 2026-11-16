@@ -1,6 +1,42 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## Active handoff update (2026-11-13)
+## Active handoff update (2026-11-16)
+
+**🚀 SHIM-BOOT-0108: RESOLVED UI DISAPPEARANCE & WALLPAPER FLASHING ROOT CAUSE (PIXEL-BY-PIXEL COMPOSITING OVER WALLPAPER INSTEAD OF BLANKET BCOPY)**
+- **User Feedback & Problem Observations:**
+  - "vẫn k có" on 0107 (full-bleed WWDC 2022 wallpaper displayed cleanly, but clock, lock, date, icons, and AssistiveTouch missing).
+  - Earlier user observations:
+    - "tôi vuốt nó hiện màn hình icon xong lại hiển thị lại ảnh đó" (swiping showed icons briefly then snapped back to wallpaper).
+    - "tôi làm gì ở lockscreen nó cũng hiển thị ảnh đó sau khi thực hiện 1 thao tác" (any tap or gesture reverted to the static wallpaper).
+- **Exhaustive Root Cause Analysis:**
+  1. On iOS without DCP hardware overlays, QuartzCore's RenderServer flattens and renders the entire UI onto a single IOSurface on **Layer 0**.
+  2. Because Setup Assistant was bypassed and PosterBoard has no configured poster, SpringBoard renders an empty black background (`(px & 0x00ffffff) == 0`) underneath the clock, lock icon, and widgets.
+  3. In `0083-sweet-fb-bulk-copy.patch`, `AppleCLCD::present` sampled 4 probe points at `x = width / 2` (`sh * 1/10, 3/10, 5/10, 8/10`). Because the background behind the UI was black, all 4 points were black (`(*p & 0x00ffffff) == 0`), making `is_empty_backdrop = true`.
+  4. When `is_empty_backdrop` was true, the kernel executed:
+     `bcopy(sweet_wallpaper_pixels, (void *)fPixels, (size_t)fHeight * fRowBytes);`
+     This **completely overwrote `fPixels` with the raw wallpaper**, wiping out the clock, date, AssistiveTouch, and lock icons that SpringBoard had just rendered!
+  5. When the user swiped up, the app icons moved across the 4 probe points. As soon as an icon crossed a probe point, `is_empty_backdrop` briefly became `false`, so `bcopy` didn't execute and the icons appeared on screen. Once the gesture finished and the probe points hit black again, `bcopy` wiped the screen back to raw wallpaper!
+- **Fix in Milestone 0108:**
+  - Replaced the destructive blanket `bcopy(sweet_wallpaper_pixels, fPixels)` with precise pixel-by-pixel compositing:
+    ```cpp
+    if (is_empty_backdrop) {
+        uint32_t copy_w = ((uint32_t)(dx + w) > fWidth) ? (fWidth > (uint32_t)dx ? fWidth - (uint32_t)dx : 0) : (uint32_t)w;
+        for (uint32_t y = 0; y < copy_h; y++) {
+            const uint32_t *sp = (const uint32_t *)(const void *)srcRow;
+            uint32_t *dp = (uint32_t *)(void *)dstRow;
+            const uint32_t *wp = (const uint32_t *)(const void *)(sweet_wallpaper_pixels + (uint64_t)(dy + y) * fRowBytes + (uint64_t)dx * 4);
+            for (uint32_t x = 0; x < copy_w; x++) {
+                uint32_t px = sp[x];
+                dp[x] = ((px & 0x00ffffff) == 0) ? wp[x] : px;
+            }
+            srcRow += s->bytesPerRow;
+            dstRow += fRowBytes;
+        }
+    }
+    ```
+  - For every pixel where SpringBoard has black background (`(px & 0x00ffffff) == 0`), the official WWDC 2022 wallpaper is shown.
+  - For every pixel where SpringBoard rendered content (white clock, date, lock icon, AssistiveTouch, app icons, widgets), the UI pixel is preserved!
+  - Commit `d524d6d` pushed to `main`; triggered GitHub Actions CI run `43828829497`.
 
 **🚀 SHIM-BOOT-0107 BUILT & LIVE BOOTED: CLEAN GM1901 HARDWARE DRIVERS RESTORED + EXPANDED 180PX BOTTOM TOUCH EDGE GESTURES + FULL-BLEED OFFICIAL IOS 16 WWDC WALLPAPER**
 - **User Feedback & Problem Analysis:**
