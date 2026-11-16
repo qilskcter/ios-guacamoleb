@@ -2,6 +2,13 @@
 
 ## Active handoff update (2026-11-16)
 
+**📱 DEVICE RETURNED TEMPORARILY TO OXYGENOS UPON USER REQUEST**
+- User requested to use OxygenOS temporarily.
+- Partition status checked: `system_b` (3.64 GB), `vendor_b`, `boot_b`, `modem_b` and all firmware partitions were intact on the phone.
+- Ran `fastboot -s 85d68e24 -w` to format `userdata` back to native Android `f2fs`.
+- Ran `fastboot -s 85d68e24 reboot` to boot OnePlus 7 into OxygenOS.
+- All iOS 16 kernel modifications, patches (including Milestone 0108 compositing fix), and tools remain committed and preserved in the repository for resumption at any time.
+
 **🚀 SHIM-BOOT-0108: RESOLVED UI DISAPPEARANCE & WALLPAPER FLASHING ROOT CAUSE (PIXEL-BY-PIXEL COMPOSITING OVER WALLPAPER INSTEAD OF BLANKET BCOPY)**
 - **User Feedback & Problem Observations:**
   - "vẫn k có" on 0107 (full-bleed WWDC 2022 wallpaper displayed cleanly, but clock, lock, date, icons, and AssistiveTouch missing).
